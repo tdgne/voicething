@@ -6,6 +6,8 @@ use std::error::Error;
 use std::io::{Read, Seek};
 use std::marker::PhantomData;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
+use std::time::Duration;
 
 #[derive(Getters)]
 pub struct StaticSource<R: Read + Seek + Send> {
@@ -17,7 +19,7 @@ pub struct StaticSource<R: Read + Seek + Send> {
     position: usize,
     #[getset(get = "pub", set = "pub")]
     chunk_duration: usize,
-    senders: Vec<Option<Sender<Option<SampleChunk<f32>>>>>,
+    sender: Option<Sender<SampleChunk<f32>>>,
     phantom: PhantomData<R>,
 }
 
@@ -38,7 +40,7 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
             position: 0,
             chunk_duration,
             phantom: PhantomData,
-            senders: vec![],
+            sender: None,
         })
     }
 }
@@ -49,39 +51,38 @@ impl<R: Read + Seek + Send> Iterator for StaticSource<R> {
     fn next(&mut self) -> Option<SampleChunk<f32>> {
         let current_position = self.position;
         let next_position = current_position + self.chunk_duration * self.metadata.channels();
-        let chunk = {
-            if next_position > self.samples.len() {
-                return None;
-            }
-            self.position = next_position;
-            Some(
-                SampleChunk::from_flat_samples(
-                    &self.samples[current_position..next_position],
-                    self.metadata.clone(),
-                )
-                .unwrap(),
-            )
-        };
+        if next_position > self.samples.len() {
+            return None;
+        }
+        self.position = next_position;
+        let chunk = SampleChunk::from_flat_samples(
+            &self.samples[current_position..next_position],
+            self.metadata.clone(),
+        )
+        .unwrap();
 
-        for sender in self.senders.iter_mut().filter(|sender| sender.is_some()) {
-            if let Err(_) = sender.as_ref().map(|s| s.send(chunk.clone())).unwrap() {
-                // discard dead senders
-                *sender = None
-            }
+        if let Some(sender) = self.sender {
+            sender.send(chunk.clone()).unwrap();
         }
 
-        chunk
+        Some(chunk)
     }
 }
 
 impl<R: Read + Seek + Send> StaticSource<R> {
-    pub fn new_receiver(&mut self) -> Receiver<Option<SampleChunk<f32>>> {
+    pub fn output(&mut self) -> Receiver<SampleChunk<f32>> {
         let (sender, receiver) = channel();
-        self.senders.push(Some(sender));
+        self.sender = Some(sender);
         receiver
     }
 
-    pub fn play_all(&mut self) {
-        while let Some(_) = self.next() {}
+    pub fn play_all(&mut self, sleep: bool) {
+        while let Some(_) = self.next() {
+            if sleep {
+                let seconds =
+                    (self.chunk_duration as f64) / (*self.metadata().sample_rate() as f64);
+                thread::sleep(Duration::from_micros((seconds * 1e6f64) as u64));
+            }
+        }
     }
 }

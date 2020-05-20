@@ -6,12 +6,12 @@ use std::sync::mpsc::Receiver;
 #[derive(Getters)]
 pub struct PlaybackSink {
     #[getset(get = "pub", set = "pub")]
-    receiver: Receiver<Option<SampleChunk<f32>>>,
+    receiver: Receiver<SampleChunk<f32>>,
     rodio_sink: rodio::Sink,
 }
 
 impl PlaybackSink {
-    pub fn new(receiver: Receiver<Option<SampleChunk<f32>>>, rodio_sink: rodio::Sink) -> Self {
+    pub fn new(receiver: Receiver<SampleChunk<f32>>, rodio_sink: rodio::Sink) -> Self {
         Self {
             receiver,
             rodio_sink,
@@ -21,13 +21,11 @@ impl PlaybackSink {
     pub fn start_playback(&self) {
         self.rodio_sink.play();
         for chunk in self.receiver.iter() {
-            if let Some(chunk) = chunk {
-                self.rodio_sink.append(rodio::buffer::SamplesBuffer::new(
-                    *chunk.metadata().channels() as u16,
-                    *chunk.metadata().sample_rate() as u32,
-                    chunk.flattened_samples(),
-                ))
-            }
+            self.rodio_sink.append(rodio::buffer::SamplesBuffer::new(
+                *chunk.metadata().channels() as u16,
+                *chunk.metadata().sample_rate() as u32,
+                chunk.flattened_samples(),
+            ))
         }
     }
 }

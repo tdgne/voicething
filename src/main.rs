@@ -2,6 +2,7 @@ use clap::Clap;
 use rodio;
 use std::io::BufReader;
 use std::thread;
+use std::time;
 
 mod stream;
 use stream::{PlaybackSink, StaticSource};
@@ -30,12 +31,12 @@ fn main() {
             let rsink = rodio::Sink::new(&device);
             let file = std::fs::File::open(opts.input_file).unwrap();
             let mut src = StaticSource::new(BufReader::new(file), 512).unwrap();
-            let rx = src.new_receiver();
+            let rx = src.output();
             let playback_thread = thread::spawn(move || {
                 let sink = PlaybackSink::new(rx, rsink);
                 sink.start_playback();
             });
-            src.play_all();
+            src.play_all(false);
             playback_thread.join().unwrap();
         })
     };
