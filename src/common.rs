@@ -4,7 +4,7 @@ use rustfft::num_traits::Num;
 
 #[derive(Getters)]
 #[getset(get = "pub")]
-#[derive(new)]
+#[derive(new, Clone)]
 pub struct AudioMetadata {
     channels: usize,
     sample_rate: usize,
@@ -25,7 +25,7 @@ impl std::error::Error for SampleLengthError {
     }
 }
 
-#[derive(Getters)]
+#[derive(Getters, Clone)]
 pub struct SampleChunk<S: Num + Clone> {
     samples: Vec<Vec<S>>,
     #[getset(get = "pub")]
@@ -39,14 +39,17 @@ impl<S: Num + Clone> SampleChunk<S> {
         metadata: AudioMetadata,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let len = flat_samples.len();
-        let duration_samples = len / metadata.channels();
-        if duration_samples * metadata.channels() != len {
+        let channels = *metadata.channels();
+        let duration_samples = len / channels;
+        if duration_samples * channels != len {
             return Err(Box::new(SampleLengthError));
         }
-        let samples = flat_samples
-            .chunks_exact(duration_samples)
-            .map(|chunk| chunk.to_vec())
-            .collect::<Vec<_>>();
+        let mut samples = vec![vec![]; channels];
+        for i in 0..duration_samples {
+            for channel in 0..channels {
+                samples[channel].push(flat_samples[i * channels + channel].clone());
+            }
+        }
         Ok(Self {
             samples,
             metadata,
@@ -56,5 +59,19 @@ impl<S: Num + Clone> SampleChunk<S> {
 
     pub fn samples(&self, channel: usize) -> &[S] {
         &self.samples[channel]
+    }
+
+    pub fn flattened_samples(&self) -> Vec<S> {
+        let channels = *self.metadata().channels();
+        if channels == 1 {
+            return self.samples[0].clone();
+        }
+        let mut flattened = vec![];
+        for i in 0..self.duration_samples {
+            for channel in 0..channels {
+                flattened.push(self.samples(channel)[i].clone());
+            }
+        }
+        flattened
     }
 }

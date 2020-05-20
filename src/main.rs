@@ -1,11 +1,10 @@
 use clap::Clap;
-use futures::executor::block_on;
 use rodio;
 use std::io::BufReader;
 use std::thread;
 
 mod stream;
-use stream::input::StaticSource;
+use stream::{PlaybackSink, StaticSource};
 
 mod common;
 
@@ -28,16 +27,16 @@ fn main() {
         let opts = opts.clone();
         thread::spawn(|| {
             let device = rodio::default_output_device().unwrap();
-            let sink = rodio::Sink::new(&device);
+            let rsink = rodio::Sink::new(&device);
             let file = std::fs::File::open(opts.input_file).unwrap();
-            let src = StaticSource::new(BufReader::new(file), 512).unwrap();
-            sink.append(rodio::buffer::SamplesBuffer::new(
-                *src.metadata().channels() as u16,
-                *src.metadata().sample_rate() as u32,
-                src.samples().clone(),
-            ));
-            sink.play();
-            sink.sleep_until_end();
+            let mut src = StaticSource::new(BufReader::new(file), 512).unwrap();
+            let rx = src.new_receiver();
+            let playback_thread = thread::spawn(move || {
+                let sink = PlaybackSink::new(rx, rsink);
+                sink.start_playback();
+            });
+            src.play_all();
+            playback_thread.join().unwrap();
         })
     };
 

@@ -5,6 +5,7 @@ use rodio::source::Source;
 use std::error::Error;
 use std::io::{Read, Seek};
 use std::marker::PhantomData;
+use std::sync::mpsc::{channel, Receiver, Sender};
 
 #[derive(Getters)]
 pub struct StaticSource<R: Read + Seek + Send> {
@@ -16,6 +17,7 @@ pub struct StaticSource<R: Read + Seek + Send> {
     position: usize,
     #[getset(get = "pub", set = "pub")]
     chunk_duration: usize,
+    senders: Vec<Option<Sender<Option<SampleChunk<f32>>>>>,
     phantom: PhantomData<R>,
 }
 
@@ -36,6 +38,7 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
             position: 0,
             chunk_duration,
             phantom: PhantomData,
+            senders: vec![],
         })
     }
 }
@@ -46,16 +49,39 @@ impl<R: Read + Seek + Send> Iterator for StaticSource<R> {
     fn next(&mut self) -> Option<SampleChunk<f32>> {
         let current_position = self.position;
         let next_position = current_position + self.chunk_duration * self.metadata.channels();
-        if next_position > self.samples.len() {
-            return None;
-        }
-        self.position = next_position;
-        Some(
-            SampleChunk::from_flat_samples(
-                &self.samples[current_position..next_position],
-                self.metadata,
+        let chunk = {
+            if next_position > self.samples.len() {
+                return None;
+            }
+            self.position = next_position;
+            Some(
+                SampleChunk::from_flat_samples(
+                    &self.samples[current_position..next_position],
+                    self.metadata.clone(),
+                )
+                .unwrap(),
             )
-            .unwrap(),
-        )
+        };
+
+        for sender in self.senders.iter_mut().filter(|sender| sender.is_some()) {
+            if let Err(_) = sender.as_ref().map(|s| s.send(chunk.clone())).unwrap() {
+                // discard dead senders
+                *sender = None
+            }
+        }
+
+        chunk
+    }
+}
+
+impl<R: Read + Seek + Send> StaticSource<R> {
+    pub fn new_receiver(&mut self) -> Receiver<Option<SampleChunk<f32>>> {
+        let (sender, receiver) = channel();
+        self.senders.push(Some(sender));
+        receiver
+    }
+
+    pub fn play_all(&mut self) {
+        while let Some(_) = self.next() {}
     }
 }
