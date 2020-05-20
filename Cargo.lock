@@ -1040,6 +1040,7 @@ dependencies = [
  "getset",
  "gio",
  "gtk",
+ "hound",
  "rodio",
  "rustfft",
 ]

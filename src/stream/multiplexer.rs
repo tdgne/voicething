@@ -29,7 +29,7 @@ impl<S: Num + Clone> Multiplexer<S> {
         }
     }
 
-    pub fn new_receiver(&mut self) -> Receiver<SampleChunk<S>> {
+    pub fn new_output(&mut self) -> Receiver<SampleChunk<S>> {
         let (sender, receiver) = channel();
         self.senders.push(Some(sender));
         receiver

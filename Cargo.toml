@@ -13,6 +13,7 @@ rodio = "0.11.0"
 clap = "3.0.0-beta.1"
 getset = "0.1.1"
 derive-new = "0.5"
+hound = "3.4.0"
 
 [dependencies.gtk]
 version = "0.8.1"
