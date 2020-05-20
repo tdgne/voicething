@@ -1,0 +1,23 @@
+[package]
+name = "voice-converter"
+version = "0.1.0"
+authors = ["tdgne <tg.wd.29@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+futures = "0.3.5"
+cpal = "0.11.0"
+rustfft = "3.0.1"
+rodio = "0.11.0"
+clap = "3.0.0-beta.1"
+getset = "0.1.1"
+derive-new = "0.5"
+
+[dependencies.gtk]
+version = "0.8.1"
+features = ["v3_18"]
+
+[dependencies.gio]
+version = "0.8.1"
+
