@@ -61,7 +61,7 @@ impl<R: Read + Seek + Send> Iterator for StaticSource<R> {
         )
         .unwrap();
 
-        if let Some(sender) = self.sender {
+        if let Some(ref sender) = self.sender {
             sender.send(chunk.clone()).unwrap();
         }
 

@@ -5,7 +5,7 @@ use std::thread;
 use std::time;
 
 mod stream;
-use stream::{PlaybackSink, StaticSource};
+use stream::{PlaybackSink, StaticSource, PsolaNode};
 
 mod common;
 
@@ -31,9 +31,13 @@ fn main() {
             let rsink = rodio::Sink::new(&device);
             let file = std::fs::File::open(opts.input_file).unwrap();
             let mut src = StaticSource::new(BufReader::new(file), 512).unwrap();
-            let rx = src.output();
+            let mut psola = PsolaNode::new(src.output());
+            let rx = psola.output();
+            let sink = PlaybackSink::new(rx, rsink);
+            thread::spawn(move || {
+                psola.run();
+            });
             let playback_thread = thread::spawn(move || {
-                let sink = PlaybackSink::new(rx, rsink);
                 sink.start_playback();
             });
             src.play_all(false);

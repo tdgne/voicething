@@ -2,9 +2,8 @@ use derive_new::new;
 use getset::Getters;
 use rustfft::num_traits::Num;
 
-#[derive(Getters)]
+#[derive(Getters, Clone, new)]
 #[getset(get = "pub")]
-#[derive(new, Clone)]
 pub struct AudioMetadata {
     channels: usize,
     sample_rate: usize,
@@ -25,11 +24,12 @@ impl std::error::Error for SampleLengthError {
     }
 }
 
-#[derive(Getters, Clone)]
+#[derive(Getters, Clone, new)]
 pub struct SampleChunk<S: Num + Clone> {
     samples: Vec<Vec<S>>,
     #[getset(get = "pub")]
     metadata: AudioMetadata,
+    #[getset(get = "pub")]
     duration_samples: usize,
 }
 

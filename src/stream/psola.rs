@@ -20,7 +20,17 @@ impl PsolaNode {
     pub fn run(&mut self) {
         for chunk in self.receiver.iter() {
             if let Some(ref mut sender) = self.sender {
-                sender.send(psola(chunk));
+                let channels = *chunk.metadata().channels();
+                let mut new_samples = vec![];
+                for channel in 0..channels {
+                    new_samples.push(psola(chunk.samples(channel)));
+                }
+                let new_chunk = SampleChunk::new(
+                    new_samples,
+                    chunk.metadata().clone(),
+                    *chunk.duration_samples(),
+                );
+                sender.send(new_chunk).expect("channel broken");
             }
         }
     }
@@ -32,6 +42,6 @@ impl PsolaNode {
     }
 }
 
-fn psola(chunk: SampleChunk<f32>) -> SampleChunk<f32> {
-    unimplemented!()
+fn psola(data: &[f32]) -> Vec<f32> {
+    data.to_vec()
 }
