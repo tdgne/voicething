@@ -5,7 +5,10 @@ use std::thread;
 use std::time;
 
 mod stream;
-use stream::{PlaybackSink, StaticSource, PsolaNode, WriteSink, Multiplexer};
+use stream::{
+    MultipleOutputNode, Multiplexer, Node, PlaybackSink, PsolaNode, SingleOutputNode, StaticSource,
+    WriteSink,
+};
 
 mod common;
 

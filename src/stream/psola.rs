@@ -13,7 +13,6 @@ struct PsolaInfo {
 
 #[derive(Getters)]
 pub struct PsolaNode {
-    #[getset(get = "pub", set = "pub")]
     receiver: Receiver<SampleChunk<f32>>,
     sender: Option<Sender<SampleChunk<f32>>>,
     #[getset(get = "pub", set = "pub")]
