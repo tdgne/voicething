@@ -1,9 +1,9 @@
 use crate::common::*;
 use crate::stream::node::{Event, EventReceiver, EventSender};
 use crate::stream::{Runnable, SingleOutputNode};
-use cpal::traits::{DeviceTrait, EventLoopTrait, HostTrait};
+use cpal::traits::{EventLoopTrait, HostTrait};
 use getset::Getters;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::mpsc::channel;
 
 #[derive(Getters)]
@@ -11,6 +11,8 @@ pub struct RecordingSource {
     sender: Option<EventSender<f32>>,
     buffer: VecDeque<f32>,
     chunk_duration: usize,
+    #[getset(get_mut = "pub", get = "pub")]
+    formats: HashMap<cpal::StreamId, cpal::Format>,
 }
 
 impl RecordingSource {
@@ -19,6 +21,7 @@ impl RecordingSource {
             sender: None,
             buffer: VecDeque::new(),
             chunk_duration,
+            formats: HashMap::new(),
         }
     }
 }
@@ -26,13 +29,14 @@ impl RecordingSource {
 impl Runnable for RecordingSource {
     fn run(&mut self) {
         let host = cpal::default_host();
-        let device = host.default_input_device().unwrap();
-        let format = device.default_input_format().unwrap();
         let event_loop = host.event_loop();
-        let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
-        let metadata = AudioMetadata::new(format.channels as usize, format.sample_rate.0 as usize);
-        event_loop.play_stream(stream_id).unwrap();
-        event_loop.run(move |_stream_id, stream_result| {
+        event_loop.run(move |stream_id, stream_result| {
+            let format = match self.formats.get(&stream_id) {
+                Some(format) => format,
+                None => return,
+            };
+
+            let metadata = AudioMetadata::new(format.channels as usize, format.sample_rate.0 as usize);
             let stream_data = match stream_result {
                 Ok(stream_data) => stream_data,
                 _ => return,
@@ -54,7 +58,7 @@ impl Runnable for RecordingSource {
                     let chunk_duration = self.chunk_duration;
                     if self.buffer.len() >= channels * chunk_duration {
                         let mut samples = vec![];
-                        for i in 0..channels * chunk_duration {
+                        for _ in 0..channels * chunk_duration {
                             samples.push(self.buffer.pop_front().unwrap());
                         }
 
