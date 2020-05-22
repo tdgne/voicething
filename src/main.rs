@@ -7,7 +7,7 @@ use std::time;
 mod stream;
 use stream::{
     MultipleOutputNode, Multiplexer, Node, PlaybackSink, PsolaNode, SingleOutputNode, StaticSource,
-    WriteSink,
+    WriteSink, RecordingSource
 };
 
 mod common;
@@ -21,7 +21,9 @@ use gtk::{Application, ApplicationWindow, Button};
 #[derive(Clap, Clone)]
 #[clap(version = "1.0", author = "tdgne")]
 struct Opts {
-    input_file: String,
+    #[clap(short, long)]
+    input_file: Option<String>,
+    #[clap(short, long)]
     output_file: Option<String>,
 }
 
@@ -33,8 +35,12 @@ fn main() {
         thread::spawn(|| {
             let device = rodio::default_output_device().unwrap();
             let rsink = rodio::Sink::new(&device);
-            let file = std::fs::File::open(opts.input_file).unwrap();
-            let mut src = StaticSource::new(BufReader::new(file), 2048).unwrap();
+            let mut src: Box<dyn SingleOutputNode<f32>> = if let Some(input_file) = opts.input_file {
+                let file = std::fs::File::open(input_file).unwrap();
+                Box::new(StaticSource::new(BufReader::new(file), 2048).unwrap())
+            } else {
+                Box::new(RecordingSource::new(1024))
+            };
             let mut psola = PsolaNode::new(src.output(), 1.5);
             let mut m = Multiplexer::new(psola.output());
             let psink = PlaybackSink::new(m.new_output(), rsink);
@@ -45,6 +51,9 @@ fn main() {
                 });
             }
             thread::spawn(move || {
+                src.run();
+            });
+            thread::spawn(move || {
                 m.run();
             });
             let playback_thread = thread::spawn(move || {
@@ -53,7 +62,7 @@ fn main() {
             thread::spawn(move || {
                 psola.run();
             });
-            src.play_all(false);
+            // src.play_all(false);
             playback_thread.join().unwrap();
         })
     };

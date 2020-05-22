@@ -8,6 +8,7 @@ use std::marker::PhantomData;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use crate::stream::{Node, SingleOutputNode};
 
 #[derive(Getters)]
 pub struct StaticSource<R: Read + Seek + Send> {
@@ -19,6 +20,8 @@ pub struct StaticSource<R: Read + Seek + Send> {
     position: usize,
     #[getset(get = "pub", set = "pub")]
     chunk_duration: usize,
+    #[getset(get = "pub", set = "pub")]
+    sleep: bool,
     sender: Option<Sender<SampleChunk<f32>>>,
     phantom: PhantomData<R>,
 }
@@ -41,6 +44,7 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
             chunk_duration,
             phantom: PhantomData,
             sender: None,
+            sleep: false,
         })
     }
 }
@@ -69,16 +73,18 @@ impl<R: Read + Seek + Send> Iterator for StaticSource<R> {
     }
 }
 
-impl<R: Read + Seek + Send> StaticSource<R> {
-    pub fn output(&mut self) -> Receiver<SampleChunk<f32>> {
+impl<R: Read + Seek + Send> SingleOutputNode<f32> for StaticSource<R> {
+    fn output(&mut self) -> Receiver<SampleChunk<f32>> {
         let (sender, receiver) = channel();
         self.sender = Some(sender);
         receiver
     }
+}
 
-    pub fn play_all(&mut self, sleep: bool) {
+impl<R: Read + Seek + Send> Node for StaticSource<R> {
+    fn run(&mut self) {
         while let Some(_) = self.next() {
-            if sleep {
+            if self.sleep {
                 let seconds =
                     (self.chunk_duration as f64) / (*self.metadata().sample_rate() as f64);
                 thread::sleep(Duration::from_micros((seconds * 1e6f64) as u64));

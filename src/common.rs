@@ -2,7 +2,7 @@ use derive_new::new;
 use getset::Getters;
 use rustfft::num_traits::Num;
 
-#[derive(Getters, Clone, new)]
+#[derive(Getters, Clone, Debug, new)]
 #[getset(get = "pub")]
 pub struct AudioMetadata {
     channels: usize,
@@ -24,8 +24,12 @@ impl std::error::Error for SampleLengthError {
     }
 }
 
-#[derive(Getters, Clone, new)]
-pub struct SampleChunk<S: Num + Clone> {
+pub trait Sample: Num + Clone + Send + Sync {}
+
+impl Sample for f32 {}
+
+#[derive(Getters, Clone, Debug, new)]
+pub struct SampleChunk<S: Sample> {
     samples: Vec<Vec<S>>,
     #[getset(get = "pub")]
     metadata: AudioMetadata,
@@ -33,7 +37,7 @@ pub struct SampleChunk<S: Num + Clone> {
     duration_samples: usize,
 }
 
-impl<S: Num + Clone> SampleChunk<S> {
+impl<S: Sample> SampleChunk<S> {
     pub fn from_flat_samples(
         flat_samples: &[S],
         metadata: AudioMetadata,
