@@ -1,14 +1,15 @@
 use crate::common::*;
+use crate::stream::node::{Event, EventReceiver, EventSender};
+use crate::stream::{Runnable, SingleOutputNode};
 use getset::Getters;
 use rodio;
 use rodio::source::Source;
 use std::error::Error;
 use std::io::{Read, Seek};
 use std::marker::PhantomData;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use crate::stream::{Node, SingleOutputNode};
 
 #[derive(Getters)]
 pub struct StaticSource<R: Read + Seek + Send> {
@@ -22,7 +23,7 @@ pub struct StaticSource<R: Read + Seek + Send> {
     chunk_duration: usize,
     #[getset(get = "pub", set = "pub")]
     sleep: bool,
-    sender: Option<Sender<SampleChunk<f32>>>,
+    sender: Option<EventSender<f32>>,
     phantom: PhantomData<R>,
 }
 
@@ -49,6 +50,21 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
     }
 }
 
+impl<R: Read + Seek + Send + 'static> Runnable for StaticSource<R> {
+    fn run(&mut self) {
+        while let Some(_) = self.next() {
+            if self.sleep {
+                let seconds =
+                    (self.chunk_duration as f64) / (*self.metadata().sample_rate() as f64);
+                thread::sleep(Duration::from_micros((seconds * 1e6f64) as u64));
+            }
+        }
+        if let Some(ref sender) = self.sender {
+            sender.send(Event::Stop).unwrap();
+        }
+    }
+}
+
 impl<R: Read + Seek + Send> Iterator for StaticSource<R> {
     type Item = SampleChunk<f32>;
 
@@ -66,29 +82,17 @@ impl<R: Read + Seek + Send> Iterator for StaticSource<R> {
         .unwrap();
 
         if let Some(ref sender) = self.sender {
-            sender.send(chunk.clone()).unwrap();
+            sender.send(Event::Chunk(chunk.clone())).unwrap();
         }
 
         Some(chunk)
     }
 }
 
-impl<R: Read + Seek + Send> SingleOutputNode<f32> for StaticSource<R> {
-    fn output(&mut self) -> Receiver<SampleChunk<f32>> {
+impl<R: Read + Seek + Send + 'static> SingleOutputNode<f32> for StaticSource<R> {
+    fn output(&mut self) -> EventReceiver<f32> {
         let (sender, receiver) = channel();
         self.sender = Some(sender);
         receiver
-    }
-}
-
-impl<R: Read + Seek + Send> Node for StaticSource<R> {
-    fn run(&mut self) {
-        while let Some(_) = self.next() {
-            if self.sleep {
-                let seconds =
-                    (self.chunk_duration as f64) / (*self.metadata().sample_rate() as f64);
-                thread::sleep(Duration::from_micros((seconds * 1e6f64) as u64));
-            }
-        }
     }
 }

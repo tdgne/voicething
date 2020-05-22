@@ -1,6 +1,6 @@
 use derive_new::new;
 use getset::Getters;
-use rustfft::num_traits::{Num, NumAssignOps, NumOps, NumCast, FromPrimitive};
+use rustfft::num_traits::{FromPrimitive, Num, NumAssignOps, NumCast, NumOps};
 
 #[derive(Getters, Clone, Debug, new)]
 #[getset(get = "pub")]
@@ -24,7 +24,10 @@ impl std::error::Error for SampleLengthError {
     }
 }
 
-pub trait Sample: Num + NumAssignOps + NumOps + NumCast + FromPrimitive + Clone + Send + Sync + Copy {}
+pub trait Sample:
+    Num + NumAssignOps + NumOps + NumCast + FromPrimitive + Clone + Send + Sync + Copy
+{
+}
 
 impl Sample for f32 {}
 

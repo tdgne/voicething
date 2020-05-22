@@ -1,8 +1,9 @@
 use crate::common::*;
+use crate::stream::node::{EventReceiver, EventSender, ProcessNode};
 use getset::Getters;
 use rustfft::num_complex::Complex32;
 use rustfft::FFTplanner;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::channel;
 
 #[derive(Clone)]
 struct PsolaInfo {
@@ -13,15 +14,15 @@ struct PsolaInfo {
 
 #[derive(Getters)]
 pub struct PsolaNode {
-    receiver: Receiver<SampleChunk<f32>>,
-    sender: Option<Sender<SampleChunk<f32>>>,
+    receiver: EventReceiver<f32>,
+    sender: Option<EventSender<f32>>,
     #[getset(get = "pub", set = "pub")]
     ratio: f32,
     psola_info: Vec<PsolaInfo>,
 }
 
 impl PsolaNode {
-    pub fn new(receiver: Receiver<SampleChunk<f32>>, ratio: f32) -> Self {
+    pub fn new(receiver: EventReceiver<f32>, ratio: f32) -> Self {
         Self {
             receiver,
             sender: None,
@@ -30,33 +31,7 @@ impl PsolaNode {
         }
     }
 
-    pub fn run(&mut self) {
-        for chunk in self.receiver.iter() {
-            if let Some(ref sender) = self.sender {
-                let channels = *chunk.metadata().channels();
-                while self.psola_info.len() < channels {
-                    self.psola_info.push(PsolaInfo {
-                        old_phase: 0,
-                        new_phase: 0,
-                        prev_old_period: 0,
-                    });
-                }
-                let (samples, info) = (0..channels)
-                    .zip(self.psola_info.iter())
-                    .map(|(c, info)| self.psola(chunk.samples(c), info))
-                    .unzip();
-                let new_chunk = SampleChunk::new(
-                    samples,
-                    chunk.metadata().clone(),
-                    *chunk.duration_samples(),
-                );
-                self.psola_info = info;
-                sender.send(new_chunk).expect("channel broken");
-            }
-        }
-    }
-
-    pub fn output(&mut self) -> Receiver<SampleChunk<f32>> {
+    pub fn output(&mut self) -> EventReceiver<f32> {
         let (sender, receiver) = channel();
         self.sender = Some(sender);
         receiver
@@ -114,6 +89,35 @@ impl PsolaNode {
         } else {
             (data.to_vec(), info.clone())
         }
+    }
+}
+
+impl ProcessNode<f32> for PsolaNode {
+    fn receiver(&self) -> &EventReceiver<f32> {
+        &self.receiver
+    }
+
+    fn sender(&self) -> Option<EventSender<f32>> {
+        self.sender.clone()
+    }
+
+    fn process_chunk(&mut self, chunk: SampleChunk<f32>) -> SampleChunk<f32> {
+        let channels = *chunk.metadata().channels();
+        while self.psola_info.len() < channels {
+            self.psola_info.push(PsolaInfo {
+                old_phase: 0,
+                new_phase: 0,
+                prev_old_period: 0,
+            });
+        }
+        let (samples, info) = (0..channels)
+            .zip(self.psola_info.iter())
+            .map(|(c, info)| self.psola(chunk.samples(c), info))
+            .unzip();
+        let new_chunk =
+            SampleChunk::new(samples, chunk.metadata().clone(), *chunk.duration_samples());
+        self.psola_info = info;
+        new_chunk
     }
 }
 

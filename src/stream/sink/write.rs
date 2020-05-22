@@ -1,26 +1,30 @@
-use crate::common::*;
+use crate::stream::node::{Runnable, Event, EventReceiver};
 use getset::Getters;
-use std::sync::mpsc::Receiver;
-use std::time;
 use hound;
+use std::time;
 
 #[derive(Getters)]
 pub struct WriteSink {
     #[getset(get = "pub", set = "pub")]
-    receiver: Receiver<SampleChunk<f32>>,
+    receiver: EventReceiver<f32>,
     #[getset(get = "pub")]
     filename: String,
+    #[getset(get = "pub", set = "pub")]
+    timeout: time::Duration,
 }
 
 impl WriteSink {
-    pub fn new(receiver: Receiver<SampleChunk<f32>>, filename: String) -> Self {
-        Self {
-            receiver, filename
-        }
+    pub fn new(receiver: EventReceiver<f32>, filename: String) -> Self {
+        Self { receiver, filename, timeout: time::Duration::from_millis(10) }
     }
+}
 
-    pub fn run(&self, timeout: time::Duration) {
-        let mut chunk = self.receiver.recv().unwrap();
+impl Runnable for WriteSink {
+    fn run(&mut self) {
+        let mut chunk = match self.receiver.recv().unwrap() {
+            Event::Chunk(chunk) => chunk,
+            _ => panic!("The first event was Stop"),
+        };
         let spec = hound::WavSpec {
             channels: *chunk.metadata().channels() as u16,
             sample_rate: *chunk.metadata().sample_rate() as u32,
@@ -31,10 +35,15 @@ impl WriteSink {
         loop {
             let samples = chunk.flattened_samples();
             for sample in samples {
-                writer.write_sample((sample * i16::MAX as f32) as i16).unwrap();
+                writer
+                    .write_sample((sample * i16::MAX as f32) as i16)
+                    .unwrap();
             }
-            if let Ok(next_chunk) = self.receiver.recv_timeout(timeout) {
-                chunk = next_chunk;
+            if let Ok(event) = self.receiver.recv_timeout(self.timeout) {
+                chunk = match event {
+                    Event::Chunk(chunk) => chunk,
+                    Stop => break,
+                };
             } else {
                 break;
             }

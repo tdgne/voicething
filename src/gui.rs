@@ -1,7 +1,9 @@
 use imgui::*;
 mod support;
 
-pub fn main_loop() {
+use crate::stream::{Mixer};
+
+pub fn main_loop(mixer: Mixer<f32>) {
     let system = support::init("voicething");
 
     system.main_loop(move |_, ui| {
