@@ -12,11 +12,7 @@ use stream::{
 
 mod common;
 
-/*
-use gio::prelude::*;
-use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Button};
-*/
+mod gui;
 
 #[derive(Clap, Clone)]
 #[clap(version = "1.0", author = "tdgne")]
@@ -30,9 +26,9 @@ struct Opts {
 fn main() {
     let opts = Opts::parse();
 
-    let handle = {
+    {
         let opts = opts.clone();
-        thread::spawn(|| {
+        thread::spawn(move || {
             let device = rodio::default_output_device().unwrap();
             let rsink = rodio::Sink::new(&device);
             let mut src: Box<dyn SingleOutputNode<f32>> = if let Some(input_file) = opts.input_file {
@@ -64,29 +60,8 @@ fn main() {
             });
             // src.play_all(false);
             playback_thread.join().unwrap();
-        })
-    };
-
-    handle.join().unwrap();
-
-    /*
-    let application =
-        Application::new(None, Default::default()).expect("failed to initialize GTK application");
-
-    application.connect_activate(|app| {
-        let window = ApplicationWindow::new(app);
-        window.set_title("Voice Converter");
-        window.set_default_size(350, 70);
-
-        let button = Button::new_with_label("Click me!");
-        button.connect_clicked(|_| {
-            println!("Clicked!");
         });
-        window.add(&button);
+    }
 
-        window.show_all();
-    });
-
-    application.run(&[]);
-    */
+    gui::main_loop();
 }

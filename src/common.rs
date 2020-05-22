@@ -1,6 +1,6 @@
 use derive_new::new;
 use getset::Getters;
-use rustfft::num_traits::Num;
+use rustfft::num_traits::{Num, NumAssignOps, NumOps, NumCast, FromPrimitive};
 
 #[derive(Getters, Clone, Debug, new)]
 #[getset(get = "pub")]
@@ -24,7 +24,7 @@ impl std::error::Error for SampleLengthError {
     }
 }
 
-pub trait Sample: Num + Clone + Send + Sync {}
+pub trait Sample: Num + NumAssignOps + NumOps + NumCast + FromPrimitive + Clone + Send + Sync + Copy {}
 
 impl Sample for f32 {}
 
@@ -63,6 +63,10 @@ impl<S: Sample> SampleChunk<S> {
 
     pub fn samples(&self, channel: usize) -> &[S] {
         &self.samples[channel]
+    }
+
+    pub fn samples_mut(&mut self, channel: usize) -> &mut [S] {
+        &mut self.samples[channel]
     }
 
     pub fn flattened_samples(&self) -> Vec<S> {
