@@ -16,7 +16,6 @@ struct PsolaInfo {
 pub struct PsolaNode {
     receiver: EventReceiver<f32>,
     sender: Option<EventSender<f32>>,
-    #[getset(get = "pub", set = "pub")]
     ratio: f32,
     psola_info: Vec<PsolaInfo>,
 }
@@ -29,6 +28,14 @@ impl PsolaNode {
             ratio,
             psola_info: vec![],
         }
+    }
+
+    pub fn ratio(&mut self) -> f32 {
+        self.ratio
+    }
+
+    pub fn ratio_mut(&mut self) -> &mut f32 {
+        &mut self.ratio
     }
 
     pub fn output(&mut self) -> EventReceiver<f32> {

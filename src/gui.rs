@@ -1,15 +1,16 @@
-use imgui::*;
 use glium::{
     backend::Facade,
     texture::{ClientFormat, RawImage2d},
     Texture2d,
 };
-use std::thread;
+use imgui::*;
 use std::sync::{Arc, Mutex};
+use std::thread;
 mod support;
 
 use crate::stream::{
-    MultipleOutputNode, EventReceiver, EventSender, Mixer, ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, Multiplexer, Event
+    Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer, ProcessNode,
+    PsolaNode, ReceiverVolumePair, Runnable,
 };
 
 pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
@@ -34,56 +35,55 @@ pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
         input_mtx.run();
     });
 
-    thread::spawn(move || loop {
-        psola.lock().unwrap().run_once();
-    });
+    {
+        let psola = psola.clone();
+        thread::spawn(move || loop {
+            psola.lock().unwrap().run_once();
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        });
+    }
 
     thread::spawn(move || {
         output_mtx.run();
     });
 
     {
-        let mut input_values = vec![];
-        let mut output_values = vec![];
-        let mut time = 0u32;
+        let mut input_amplitudes = vec![];
+        let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
-            Window::new(im_str!("waveforms"))
+            Window::new(im_str!("I/O monitor"))
                 .size([500.0, 300.0], Condition::FirstUseEver)
-                .build(ui, || {
+                .build(&ui, || {
                     if let Ok(Event::Chunk(chunk)) = input_mtx_out.try_recv() {
-                        input_values.push(chunk.samples(0).to_vec());
+                        input_amplitudes = chunk.samples(0).to_vec();
                     }
                     if let Ok(Event::Chunk(chunk)) = output_mtx_out.try_recv() {
-                        output_values.push(chunk.samples(0).to_vec());
+                        output_amplitudes = chunk.samples(0).to_vec();
                     }
-                    let display_input_values = if time > 0 && time < input_values.len() as u32 {
-                        Some(&input_values[time as usize])
-                    } else {
-                        None
-                    };
-                    let display_output_values = if time > 0 && time < output_values.len() as u32 {
-                        Some(&output_values[time as usize])
-                    } else {
-                        None
-                    };
-                    if let Some(d) = display_input_values {
-                    let p = &input_values[time as usize-1];
-                        ui.plot_lines(im_str!("input"), &[&p[..], &d[..]].concat())
-                            .scale_min(-1.0)
-                            .scale_max(1.0)
-                            .graph_size([400.0, 100.0])
-                            .build();
-                    }
-                    if let Some(d) = display_output_values {
-                    let p = &output_values[time as usize-1];
-                        ui.plot_lines(im_str!("output"), &[&p[..], &d[..]].concat())
-                            .scale_min(-1.0)
-                            .scale_max(1.0)
-                            .graph_size([400.0, 100.0])
-                            .build();
-                    }
-                    Slider::new(im_str!(""), std::ops::RangeInclusive::new(0u32, input_values.len() as u32))
-                        .build(&ui, &mut time);
+                    ui.plot_lines(im_str!(""), &input_amplitudes)
+                        .overlay_text(im_str!("IN"))
+                        .scale_min(-1.0)
+                        .scale_max(1.0)
+                        .graph_size([400.0, 100.0])
+                        .build();
+                    ui.same_line_with_spacing(400.0, 10.0);
+                    ui.plot_lines(im_str!(""), &output_amplitudes)
+                        .overlay_text(im_str!("OUT"))
+                        .scale_min(-1.0)
+                        .scale_max(1.0)
+                        .graph_size([400.0, 100.0])
+                        .build();
+                    ui.new_line();
+                });
+            Window::new(im_str!("TD-PSOLA"))
+                .size([100.0, 300.0], Condition::FirstUseEver)
+                .build(&ui, || {
+                    VerticalSlider::new(
+                        im_str!("pitch"),
+                        [10.0, 300.0],
+                        std::ops::RangeInclusive::new(0.5, 2.0),
+                    )
+                    .build(&ui, psola.lock().unwrap().ratio_mut());
                 });
         });
     }
