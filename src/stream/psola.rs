@@ -7,9 +7,9 @@ use std::sync::mpsc::channel;
 
 #[derive(Clone)]
 struct PsolaInfo {
-    old_phase: isize,
-    new_phase: isize,
-    prev_old_period: isize,
+    in_phase: isize,
+    out_phase: isize,
+    in_period: isize,
 }
 
 #[derive(Getters)]
@@ -38,52 +38,52 @@ impl PsolaNode {
     }
 
     fn psola(&self, data: &[f32], info: &PsolaInfo) -> (Vec<f32>, PsolaInfo) {
-        if let Some(old_period) = period(
+        if let Some(in_period) = period(
             data,
             (50, 800),
             data.iter().fold(0.0, |a, b| f32::max(a * a, b * b)) / 4.0,
         ) {
             let ratio = self.ratio;
-            let old_phase = info.old_phase;
-            let new_phase = info.new_phase;
-            let prev_old_period = info.prev_old_period;
-            let old_period = old_period as isize;
-            let new_period = (old_period as f32 / ratio) as isize;
-            let mut old_peak = old_phase + (prev_old_period as isize + old_period) / 2;
-            let mut new_peak = new_phase;
+            let in_phase = info.in_phase;
+            let out_phase = info.out_phase;
+            let prev_in_period = info.in_period;
+            let in_period = in_period as isize;
+            let out_period = (in_period as f32 / ratio) as isize;
+            let mut in_peak = in_phase + (prev_in_period as isize + in_period) / 2;
+            let mut out_peak = out_phase;
             let mut result = vec![0.0; data.len()];
-            while new_peak < result.len() as isize {
-                while (old_peak + old_period - new_peak).abs() < (old_peak - new_peak).abs()
-                    && old_peak + old_period < data.len() as isize
+            while out_peak < result.len() as isize {
+                while (in_peak + in_period - out_peak).abs() < (in_peak - out_peak).abs()
+                    && in_peak + in_period < data.len() as isize
                 {
-                    old_peak += old_period;
+                    in_peak += in_period;
                 }
-                for d in -old_period..old_period {
-                    let i = (new_peak + d) as usize;
+                for d in -in_period..in_period {
+                    let i = (out_peak + d) as usize;
                     if i >= result.len() {
                         continue;
                     }
-                    let mut old_i = old_peak + d;
-                    if old_i < 0 || i >= data.len() {
+                    let mut in_i = in_peak + d;
+                    if in_i < 0 || i >= data.len() {
                         continue;
                     }
-                    while old_i >= data.len() as isize {
-                        old_i -= old_period
+                    while in_i >= data.len() as isize {
+                        in_i -= in_period
                     }
                     {
-                        let old_i = old_i as usize;
-                        let old_period = old_period as f32;
+                        let in_i = in_i as usize;
+                        let in_period = in_period as f32;
                         let d = d as f32;
-                        result[i] += data[old_i] * ((old_period - d.abs()) / old_period);
+                        result[i] += data[in_i] * ((in_period - d.abs()) / in_period);
                     }
                 }
-                new_peak += new_period;
+                out_peak += out_period;
             }
 
             let info = PsolaInfo {
-                old_phase: old_peak - data.len() as isize,
-                new_phase: new_peak - result.len() as isize,
-                prev_old_period: old_period as isize,
+                in_phase: in_peak - data.len() as isize,
+                out_phase: out_peak - result.len() as isize,
+                in_period: in_period as isize,
             };
             (result, info)
         } else {
@@ -105,19 +105,19 @@ impl ProcessNode<f32> for PsolaNode {
         let channels = *chunk.metadata().channels();
         while self.psola_info.len() < channels {
             self.psola_info.push(PsolaInfo {
-                old_phase: 0,
-                new_phase: 0,
-                prev_old_period: 0,
+                in_phase: 0,
+                out_phase: 0,
+                in_period: 0,
             });
         }
         let (samples, info) = (0..channels)
             .zip(self.psola_info.iter())
             .map(|(c, info)| self.psola(chunk.samples(c), info))
             .unzip();
-        let new_chunk =
+        let out_chunk =
             SampleChunk::new(samples, chunk.metadata().clone(), *chunk.duration_samples());
         self.psola_info = info;
-        new_chunk
+        out_chunk
     }
 }
 
