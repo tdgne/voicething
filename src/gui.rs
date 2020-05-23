@@ -17,7 +17,7 @@ pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
     let system = support::init("voicething");
 
     let mut input_mtx = Multiplexer::new(input);
-    let psola = Arc::new(Mutex::new(PsolaNode::new(input_mtx.new_output(), 1.5)));
+    let psola = Arc::new(Mutex::new(PsolaNode::new(input_mtx.new_output(), 1.0)));
     let psola_out = psola.lock().unwrap().output();
     let mut output_mtx = Multiplexer::new(psola_out);
 
@@ -52,7 +52,8 @@ pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
         let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
             Window::new(im_str!("I/O monitor"))
-                .size([500.0, 300.0], Condition::FirstUseEver)
+                .always_auto_resize(true)
+                .position([0.0, 0.0], Condition::FirstUseEver)
                 .build(&ui, || {
                     if let Ok(Event::Chunk(chunk)) = input_mtx_out.try_recv() {
                         input_amplitudes = chunk.samples(0).to_vec();
@@ -64,25 +65,25 @@ pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
                         .overlay_text(im_str!("IN"))
                         .scale_min(-1.0)
                         .scale_max(1.0)
-                        .graph_size([400.0, 100.0])
+                        .graph_size([300.0, 100.0])
                         .build();
-                    ui.same_line_with_spacing(400.0, 10.0);
                     ui.plot_lines(im_str!(""), &output_amplitudes)
                         .overlay_text(im_str!("OUT"))
                         .scale_min(-1.0)
                         .scale_max(1.0)
-                        .graph_size([400.0, 100.0])
+                        .graph_size([300.0, 100.0])
                         .build();
-                    ui.new_line();
                 });
             Window::new(im_str!("TD-PSOLA"))
-                .size([100.0, 300.0], Condition::FirstUseEver)
+                .always_auto_resize(true)
+                .position([400.0, 0.0], Condition::FirstUseEver)
                 .build(&ui, || {
                     VerticalSlider::new(
                         im_str!("pitch"),
-                        [10.0, 300.0],
+                        [30.0, 250.0],
                         std::ops::RangeInclusive::new(0.5, 2.0),
                     )
+                    .display_format(im_str!("%0.2f"))
                     .build(&ui, psola.lock().unwrap().ratio_mut());
                 });
         });

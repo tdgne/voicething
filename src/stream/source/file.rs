@@ -17,18 +17,20 @@ pub struct StaticSource<R: Read + Seek + Send> {
     samples: Vec<f32>,
     #[getset(get = "pub")]
     metadata: AudioMetadata,
-    #[getset(get = "pub")]
+    #[getset(get = "pub", set = "pub")]
     position: usize,
     #[getset(get = "pub", set = "pub")]
     chunk_duration: usize,
     #[getset(get = "pub", set = "pub")]
     sleep: bool,
+    #[getset(get = "pub", set = "pub")]
+    repeat: bool,
     sender: Option<EventSender<f32>>,
     phantom: PhantomData<R>,
 }
 
 impl<R: Read + Seek + Send + 'static> StaticSource<R> {
-    pub fn new(input: R, chunk_duration: usize, sleep: bool) -> Result<Self, Box<dyn Error>> {
+    pub fn new(input: R, chunk_duration: usize, repeat: bool) -> Result<Self, Box<dyn Error>> {
         let decoder = rodio::Decoder::new(input)?;
         let channels = decoder.channels() as usize;
         let sample_rate = decoder.sample_rate() as usize;
@@ -45,7 +47,8 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
             chunk_duration,
             phantom: PhantomData,
             sender: None,
-            sleep
+            sleep: true,
+            repeat,
         })
     }
 }
@@ -54,21 +57,30 @@ impl<R: Read + Seek + Send + 'static> Runnable for StaticSource<R> {
     fn run(&mut self) {
         let mut sleep_start: Option<SystemTime> = None;
         let mut planned_sleep_time = Duration::from_secs(0);
-        while let Some(_) = self.next() {
-            if self.sleep {
-                let duration = {
-                    let float_secs =
-                        (self.chunk_duration as f64) / (*self.metadata().sample_rate() as f64);
-                    Duration::from_micros((float_secs * 1e6f64) as u64)
-                };
-                let excess_time = if let Some(sleep_start) = sleep_start {
-                    sleep_start.elapsed().unwrap() - planned_sleep_time
-                } else {
-                    Duration::from_secs(0)
-                };
-                planned_sleep_time = duration - excess_time;
-                sleep_start = Some(SystemTime::now());
-                thread::sleep(planned_sleep_time);
+        loop {
+            while let Some(_) = self.next() {
+                // sleep if repeat is on because I don't want to
+                // infinitely push samples.
+                if self.sleep || self.repeat {
+                    let duration = {
+                        let float_secs =
+                            (self.chunk_duration as f64) / (*self.metadata().sample_rate() as f64);
+                        Duration::from_micros((float_secs * 1e6f64) as u64)
+                    };
+                    let excess_time = if let Some(sleep_start) = sleep_start {
+                        sleep_start.elapsed().unwrap() - planned_sleep_time
+                    } else {
+                        Duration::from_secs(0)
+                    };
+                    planned_sleep_time = duration - excess_time;
+                    sleep_start = Some(SystemTime::now());
+                    thread::sleep(planned_sleep_time);
+                }
+            }
+            if !self.repeat {
+                break;
+            } else {
+                self.position = 0;
             }
         }
         if let Some(ref sender) = self.sender {
