@@ -22,7 +22,7 @@ pub fn spawn_output_thread(output: EventReceiver<f32>) {
 pub fn spawn_input_thread(options: Options) -> EventReceiver<f32> {
     let mut src: Box<dyn SingleOutputNode<f32>> = if let Some(input_file) = options.input_file() {
         let file = std::fs::File::open(input_file).unwrap();
-        Box::new(StaticSource::new(BufReader::new(file), 2048).unwrap())
+        Box::new(StaticSource::new(BufReader::new(file), 2048, true).unwrap())
     } else {
         Box::new(RecordingSource::new(2048))
     };

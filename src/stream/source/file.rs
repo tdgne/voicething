@@ -9,7 +9,7 @@ use std::io::{Read, Seek};
 use std::marker::PhantomData;
 use std::sync::mpsc::channel;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 #[derive(Getters)]
 pub struct StaticSource<R: Read + Seek + Send> {
@@ -28,7 +28,7 @@ pub struct StaticSource<R: Read + Seek + Send> {
 }
 
 impl<R: Read + Seek + Send + 'static> StaticSource<R> {
-    pub fn new(input: R, chunk_duration: usize) -> Result<Self, Box<dyn Error>> {
+    pub fn new(input: R, chunk_duration: usize, sleep: bool) -> Result<Self, Box<dyn Error>> {
         let decoder = rodio::Decoder::new(input)?;
         let channels = decoder.channels() as usize;
         let sample_rate = decoder.sample_rate() as usize;
@@ -45,18 +45,30 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
             chunk_duration,
             phantom: PhantomData,
             sender: None,
-            sleep: false,
+            sleep
         })
     }
 }
 
 impl<R: Read + Seek + Send + 'static> Runnable for StaticSource<R> {
     fn run(&mut self) {
+        let mut sleep_start: Option<SystemTime> = None;
+        let mut planned_sleep_time = Duration::from_secs(0);
         while let Some(_) = self.next() {
             if self.sleep {
-                let seconds =
-                    (self.chunk_duration as f64) / (*self.metadata().sample_rate() as f64);
-                thread::sleep(Duration::from_micros((seconds * 1e6f64) as u64));
+                let duration = {
+                    let float_secs =
+                        (self.chunk_duration as f64) / (*self.metadata().sample_rate() as f64);
+                    Duration::from_micros((float_secs * 1e6f64) as u64)
+                };
+                let excess_time = if let Some(sleep_start) = sleep_start {
+                    sleep_start.elapsed().unwrap() - planned_sleep_time
+                } else {
+                    Duration::from_secs(0)
+                };
+                planned_sleep_time = duration - excess_time;
+                sleep_start = Some(SystemTime::now());
+                thread::sleep(planned_sleep_time);
             }
         }
         if let Some(ref sender) = self.sender {

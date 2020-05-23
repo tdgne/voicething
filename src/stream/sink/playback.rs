@@ -20,7 +20,10 @@ impl PlaybackSink {
 
 impl Runnable for PlaybackSink {
     fn run(&mut self) {
+        use std::time::{Duration, SystemTime};
+        let now = SystemTime::now();
         self.rodio_sink.play();
+        println!("p {:?}", now.elapsed().unwrap());
         for event in self.receiver.iter() {
             match event {
                 Event::Chunk(chunk) => self.rodio_sink.append(rodio::buffer::SamplesBuffer::new(
