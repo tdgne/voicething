@@ -12,50 +12,66 @@ use crate::{config, config::Config};
 
 use crate::common::AudioMetadata;
 
+fn do_in_thread<T: Send + 'static>(f: fn() -> T) -> T {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        tx.send(f()).unwrap();
+    });
+    rx.recv().unwrap()
+}
+
 pub fn default_input_device_name() -> Option<String> {
-    let host = cpal::default_host();
-    host.default_input_device().map(|d| d.name().unwrap())
+    do_in_thread(|| {
+        let host = cpal::default_host();
+        host.default_input_device().map(|d| d.name().unwrap())
+    })
 }
 
 pub fn input_device_names() -> Vec<String> {
-    let host = cpal::default_host();
-    host.devices()
-        .unwrap()
-        .flat_map(|device| {
-            if device
-                .supported_input_formats()
-                .map_or(None, |mut formats| formats.next())
-                .is_some()
-            {
-                device.name().ok()
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>()
+    do_in_thread(|| {
+        let host = cpal::default_host();
+        host.devices()
+            .unwrap()
+            .flat_map(|device| {
+                if device
+                    .supported_input_formats()
+                    .map_or(None, |mut formats| formats.next())
+                    .is_some()
+                {
+                    device.name().ok()
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    })
 }
 
 pub fn default_output_device_name() -> Option<String> {
-    let host = cpal::default_host();
-    host.default_output_device().map(|d| d.name().unwrap())
+    do_in_thread(|| {
+        let host = cpal::default_host();
+        host.default_output_device().map(|d| d.name().unwrap())
+    })
 }
 
 pub fn output_device_names() -> Vec<String> {
-    let host = cpal::default_host();
-    host.devices()
-        .unwrap()
-        .flat_map(|device| {
-            if device
-                .supported_output_formats()
-                .map_or(None, |mut formats| formats.next())
-                .is_some()
-            {
-                device.name().ok()
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>()
+    do_in_thread(|| {
+        let host = cpal::default_host();
+        host.devices()
+            .unwrap()
+            .flat_map(|device| {
+                if device
+                    .supported_output_formats()
+                    .map_or(None, |mut formats| formats.next())
+                    .is_some()
+                {
+                    device.name().ok()
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    })
 }
 
 pub fn spawn_output_thread(output: EventReceiver<f32>) -> Arc<Mutex<PlaybackSink>> {
