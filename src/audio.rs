@@ -10,11 +10,12 @@ use crate::stream::{
 use crate::common::AudioMetadata;
 
 pub fn spawn_output_thread(output: EventReceiver<f32>) {
-    let device = rodio::default_output_device().unwrap();
-    let rsink = rodio::Sink::new(&device);
-    let mut playback_sink = PlaybackSink::new(output, rsink);
-
     thread::spawn(move || {
+        // cpal-related initialization needs to be called on a different thread
+        // see https://gitter.im/tomaka/glutin?at=5dc6f493add5717a88da3652
+        let device = rodio::default_output_device().unwrap();
+        let rsink = rodio::Sink::new(&device);
+        let mut playback_sink = PlaybackSink::new(output, rsink);
         playback_sink.run();
     });
 }
