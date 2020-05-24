@@ -72,16 +72,22 @@ pub fn main_loop(
                         MenuItem::new(&im_str!("{}", name)).build_with_ref(&ui, &mut selected);
                         if selected && !was_selected {
                             config.set_output(Some(config::Output::Device(name.clone())));
-                            playback_sink
-                                .lock()
-                                .unwrap()
-                                .set_rodio_sink(rodio::Sink::new(
-                                    &rodio::output_devices()
+                            {
+                                let name = name.clone();
+                                let playback_sink = playback_sink.clone();
+                                thread::spawn(move || {
+                                    playback_sink
+                                        .lock()
                                         .unwrap()
-                                        .filter(|d| d.name().unwrap() == *name)
-                                        .next()
-                                        .unwrap(),
-                                ));
+                                        .set_rodio_sink(rodio::Sink::new(
+                                            &rodio::output_devices()
+                                                .unwrap()
+                                                .filter(|d| d.name().unwrap() == *name)
+                                                .next()
+                                                .unwrap(),
+                                        ));
+                                });
+                            }
                         }
                     }
                 });
