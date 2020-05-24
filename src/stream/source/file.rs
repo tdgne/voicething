@@ -51,10 +51,8 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
             repeat,
         })
     }
-}
 
-impl<R: Read + Seek + Send + 'static> Runnable for StaticSource<R> {
-    fn run(&mut self) {
+    pub fn run(&mut self) {
         let mut sleep_start: Option<SystemTime> = None;
         let mut planned_sleep_time = Duration::from_secs(0);
         loop {
@@ -87,6 +85,12 @@ impl<R: Read + Seek + Send + 'static> Runnable for StaticSource<R> {
             sender.send(Event::Stop).unwrap();
         }
     }
+
+    pub fn output(&mut self) -> EventReceiver<f32> {
+        let (sender, receiver) = channel();
+        self.sender = Some(sender);
+        receiver
+    }
 }
 
 impl<R: Read + Seek + Send> Iterator for StaticSource<R> {
@@ -110,13 +114,5 @@ impl<R: Read + Seek + Send> Iterator for StaticSource<R> {
         }
 
         Some(chunk)
-    }
-}
-
-impl<R: Read + Seek + Send + 'static> SingleOutputNode<f32> for StaticSource<R> {
-    fn output(&mut self) -> EventReceiver<f32> {
-        let (sender, receiver) = channel();
-        self.sender = Some(sender);
-        receiver
     }
 }

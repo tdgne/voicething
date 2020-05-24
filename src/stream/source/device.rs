@@ -11,7 +11,7 @@ pub struct RecordingSource {
     sender: Option<EventSender<f32>>,
     buffer: VecDeque<f32>,
     chunk_duration: usize,
-    #[getset(get_mut = "pub", get = "pub")]
+    #[getset(get = "pub")]
     formats: HashMap<cpal::StreamId, cpal::Format>,
 }
 
@@ -24,19 +24,20 @@ impl RecordingSource {
             formats: HashMap::new(),
         }
     }
-}
 
-impl Runnable for RecordingSource {
-    fn run(&mut self) {
-        let host = cpal::default_host();
-        let event_loop = host.event_loop();
+    pub fn formats_mut(&mut self) -> &mut HashMap<cpal::StreamId, cpal::Format> {
+        &mut self.formats
+    }
+
+    pub fn run(&mut self, event_loop: cpal::EventLoop) {
         event_loop.run(move |stream_id, stream_result| {
             let format = match self.formats.get(&stream_id) {
                 Some(format) => format,
                 None => return,
             };
 
-            let metadata = AudioMetadata::new(format.channels as usize, format.sample_rate.0 as usize);
+            let metadata =
+                AudioMetadata::new(format.channels as usize, format.sample_rate.0 as usize);
             let stream_data = match stream_result {
                 Ok(stream_data) => stream_data,
                 _ => return,
@@ -72,10 +73,8 @@ impl Runnable for RecordingSource {
             }
         });
     }
-}
 
-impl SingleOutputNode<f32> for RecordingSource {
-    fn output(&mut self) -> EventReceiver<f32> {
+    pub fn output(&mut self) -> EventReceiver<f32> {
         let (sender, receiver) = channel();
         self.sender = Some(sender);
         receiver
