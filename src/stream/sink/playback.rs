@@ -1,72 +1,57 @@
 use crate::stream::node::{Event, EventReceiver, Runnable};
 use getset::Getters;
-use rodio;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 
 #[derive(Getters)]
 pub struct PlaybackSink {
     #[getset(get = "pub", set = "pub")]
     receiver: EventReceiver<f32>,
-    #[getset(get = "pub")]
-    rodio_sink: Option<rodio::Sink>,
+    buffer: Arc<Mutex<VecDeque<f32>>>,
 }
 
 impl PlaybackSink {
     pub fn new(receiver: EventReceiver<f32>) -> Self {
         Self {
             receiver,
-            rodio_sink: None,
+            buffer: Arc::new(Mutex::new(vec![].into())),
         }
     }
 
-    pub fn play(&self) {
-        if let Some(rodio_sink) = &self.rodio_sink {
-            rodio_sink.play();
+    fn send_buffer_f32(
+        &mut self,
+        format: cpal::Format,
+        out_buffer: &mut cpal::OutputBuffer<f32>,
+    ) {
+        let mut buffer = self.buffer.lock().unwrap();
+        for i in 0..out_buffer.len() {
+            if let Some(sample) = buffer.pop_front() {
+                out_buffer[i] = sample;
+            }
         }
     }
 
-    pub fn pause(&self) {
-        if let Some(rodio_sink) = &self.rodio_sink {
-            rodio_sink.pause();
-        }
-    }
-
-    pub fn set_rodio_sink(&mut self, rodio_sink: rodio::Sink) {
-        let paused = if let Some(rodio_sink) = &self.rodio_sink {
-            rodio_sink.is_paused()
-        } else {
-            false
-        };
-        if !paused {
-            self.pause();
-        }
-        self.rodio_sink = Some(rodio_sink);
-        if !paused {
-            self.play();
+    pub fn send_buffer(&mut self, format: cpal::Format, output_buffer: &mut cpal::UnknownTypeOutputBuffer) {
+        match output_buffer {
+            cpal::UnknownTypeOutputBuffer::F32(buffer) => {
+                self.send_buffer_f32(format, buffer);
+            },
+            _ => {}
         }
     }
 
     pub fn run_once(&mut self) -> bool {
-        self.play();
         if let Ok(event) = self.receiver.recv() {
             match event {
                 Event::Chunk(chunk) => {
-                    if let Some(rodio_sink) = &self.rodio_sink {
-                        rodio_sink.append(rodio::buffer::SamplesBuffer::new(
-                            *chunk.metadata().channels() as u16,
-                            *chunk.metadata().sample_rate() as u32,
-                            chunk.flattened_samples(),
-                        ))
-                    }
+                    self.buffer
+                        .lock()
+                        .unwrap()
+                        .append(&mut chunk.flattened_samples().into());
                 }
-                Event::Stop => return true
+                Event::Stop => return true,
             }
         }
         false
-    }
-
-    pub fn sleep_until_end(&self) {
-        if let Some(rodio_sink) = &self.rodio_sink {
-            rodio_sink.sleep_until_end();
-        }
     }
 }

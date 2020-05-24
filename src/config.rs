@@ -17,12 +17,14 @@ impl CommandLineOptions {
 
 #[derive(Clone)]
 pub enum Input {
+    Default,
     Device(String),
     File(String),
 }
 
 #[derive(Clone)]
 pub enum Output {
+    Default,
     Device(String),
 }
 
