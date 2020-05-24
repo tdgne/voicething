@@ -66,11 +66,20 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
                         Duration::from_micros((float_secs * 1e6f64) as u64)
                     };
                     let excess_time = if let Some(sleep_start) = sleep_start {
-                        sleep_start.elapsed().unwrap() - planned_sleep_time
+                        let elapsed = sleep_start.elapsed().unwrap();
+                        if elapsed > planned_sleep_time {
+                           elapsed - planned_sleep_time
+                        } else {
+                            Duration::from_secs(0)
+                        }
                     } else {
                         Duration::from_secs(0)
                     };
-                    planned_sleep_time = duration - excess_time;
+                    planned_sleep_time = if duration > excess_time {
+                        duration - excess_time
+                    } else {
+                        Duration::from_secs(0)
+                    };
                     sleep_start = Some(SystemTime::now());
                     thread::sleep(planned_sleep_time);
                 }

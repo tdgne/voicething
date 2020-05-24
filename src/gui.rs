@@ -4,16 +4,23 @@ use glium::{
     Texture2d,
 };
 use imgui::*;
+use rodio::DeviceTrait;
 use std::sync::{Arc, Mutex};
 use std::thread;
-mod support;
 
+mod support;
+use crate::config;
 use crate::stream::{
-    Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer, ProcessNode,
-    PsolaNode, ReceiverVolumePair, Runnable,
+    Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer, PlaybackSink,
+    ProcessNode, PsolaNode, ReceiverVolumePair, Runnable,
 };
 
-pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
+pub fn main_loop(
+    input: EventReceiver<f32>,
+    output: EventSender<f32>,
+    playback_sink: Arc<Mutex<PlaybackSink>>,
+    mut config: config::Config,
+) {
     let system = support::init("voicething");
 
     let mut input_mtx = Multiplexer::new(input);
@@ -47,11 +54,39 @@ pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
         output_mtx.run();
     });
 
+    let output_device_names = crate::audio::output_device_names();
     {
         let mut input_amplitudes = vec![];
         let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
-            Window::new(im_str!("I/O monitor"))
+            ui.main_menu_bar(|| {
+                &ui.menu(im_str!("Output"), true, || {
+                    for name in output_device_names.iter() {
+                        let mut selected =
+                            if let Some(config::Output::Device(used_name)) = config.output() {
+                                *name == *used_name
+                            } else {
+                                false
+                            };
+                        let was_selected = selected;
+                        MenuItem::new(&im_str!("{}", name)).build_with_ref(&ui, &mut selected);
+                        if selected && !was_selected {
+                            config.set_output(Some(config::Output::Device(name.clone())));
+                            playback_sink
+                                .lock()
+                                .unwrap()
+                                .set_rodio_sink(rodio::Sink::new(
+                                    &rodio::output_devices()
+                                        .unwrap()
+                                        .filter(|d| d.name().unwrap() == *name)
+                                        .next()
+                                        .unwrap(),
+                                ));
+                        }
+                    }
+                });
+            });
+            Window::new(im_str!("I/O Monitor"))
                 .always_auto_resize(true)
                 .position([0.0, 0.0], Condition::FirstUseEver)
                 .build(&ui, || {

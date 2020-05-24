@@ -1,19 +1,50 @@
 use clap::Clap;
-use getset::Getters;
+use getset::{Getters, Setters};
 
 #[derive(Clap, Getters, Clone)]
 #[clap(version = "0.0", author = "tdgne")]
-pub struct Options {
+pub struct CommandLineOptions {
     #[clap(short, long)]
     #[getset(get = "pub")]
     input_file: Option<String>,
-    #[clap(short, long)]
-    #[getset(get = "pub")]
-    output_file: Option<String>,
 }
 
-impl Options {
+impl CommandLineOptions {
     pub fn parse_pub() -> Self {
         Self::parse()
+    }
+}
+
+#[derive(Clone)]
+pub enum Input {
+    Device(String),
+    File(String),
+}
+
+#[derive(Clone)]
+pub enum Output {
+    Device(String),
+}
+
+// TODO: use wither
+#[derive(Getters, Setters, Clone)]
+#[getset(get = "pub", set = "pub")]
+pub struct Config {
+    input: Option<Input>,
+    output: Option<Output>,
+}
+
+impl Config {
+    pub fn new(
+        options: CommandLineOptions,
+        default_input: Option<Input>,
+        default_output: Option<Output>,
+    ) -> Self {
+        let input = options
+            .input_file
+            .map(|file| Input::File(file))
+            .or(default_input);
+        let output = default_output;
+        Self { input, output }
     }
 }
