@@ -2,6 +2,7 @@ use crate::stream::node::{Event, EventReceiver, Runnable};
 use getset::Getters;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+use crate::common::{AudioMetadata, SampleChunk};
 
 #[derive(Getters)]
 pub struct PlaybackSink {
@@ -14,7 +15,7 @@ impl PlaybackSink {
     pub fn new(receiver: EventReceiver<f32>) -> Self {
         Self {
             receiver,
-            buffer: Arc::new(Mutex::new(vec![].into())),
+            buffer: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
@@ -32,6 +33,7 @@ impl PlaybackSink {
     }
 
     pub fn send_buffer(&mut self, format: cpal::Format, output_buffer: &mut cpal::UnknownTypeOutputBuffer) {
+        println!("{:?}", format);
         match output_buffer {
             cpal::UnknownTypeOutputBuffer::F32(buffer) => {
                 self.send_buffer_f32(format, buffer);
@@ -47,7 +49,7 @@ impl PlaybackSink {
                     self.buffer
                         .lock()
                         .unwrap()
-                        .append(&mut chunk.flattened_samples().into());
+                        .append(&mut chunk.flattened_samples().into_iter().collect());
                 }
                 Event::Stop => return true,
             }

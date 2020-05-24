@@ -9,10 +9,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 mod support;
+use crate::common::AudioMetadata;
 use crate::config;
 use crate::stream::{
     Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer, PlaybackSink,
-    ProcessNode, PsolaNode, ReceiverVolumePair, Runnable,
+    ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, SingleOutputNode,
 };
 
 pub fn main_loop(
@@ -25,7 +26,21 @@ pub fn main_loop(
     let mut input_mtx = Multiplexer::new(input);
     let psola = Arc::new(Mutex::new(PsolaNode::new(input_mtx.new_output(), 1.0)));
     let psola_out = psola.lock().unwrap().output();
-    let mut output_mtx = Multiplexer::new(psola_out);
+
+    let mut mixer = Mixer::new(
+        vec![ReceiverVolumePair {
+            receiver: psola_out,
+            volume: 1.0,
+        }],
+        AudioMetadata::new(2, 48000),
+        1024,
+    );
+    let mixer_out = mixer.output();
+    thread::spawn(move || {
+        mixer.run();
+    });
+
+    let mut output_mtx = Multiplexer::new(mixer_out);
 
     {
         let output_mtx_out = output_mtx.new_output();

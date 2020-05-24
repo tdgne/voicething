@@ -56,14 +56,14 @@ fn spawn_audio_thread_internal(
             let format = device.default_input_format().unwrap();
             let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
             Some((format, stream_id))
-        },
+        }
         Some(config::Input::Default) => {
             let device = host.default_input_device().unwrap();
             let format = device.default_input_format().unwrap();
             let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
             event_loop.play_stream(stream_id.clone()).unwrap();
             Some((format, stream_id))
-        },
+        }
         _ => None,
     };
     let recording_rx = recording_source.output();
@@ -82,14 +82,14 @@ fn spawn_audio_thread_internal(
             let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
             event_loop.play_stream(stream_id.clone()).unwrap();
             Some((format, stream_id))
-        },
+        }
         Some(config::Output::Default) => {
             let device = host.default_output_device().unwrap();
             let format = device.default_output_format().unwrap();
             let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
             event_loop.play_stream(stream_id.clone()).unwrap();
             Some((format, stream_id))
-        },
+        }
         _ => None,
     };
 
@@ -107,11 +107,9 @@ fn spawn_audio_thread_internal(
 
     {
         let playback_sink = playback_sink.clone();
-        thread::spawn(move || {
-            loop {
-                playback_sink.lock().unwrap().run_once();
-                thread::sleep(std::time::Duration::from_millis(1));
-            }
+        thread::spawn(move || loop {
+            playback_sink.lock().unwrap().run_once();
+            thread::sleep(std::time::Duration::from_millis(1));
         });
     }
 
@@ -125,18 +123,21 @@ fn spawn_audio_thread_internal(
                             Ok(cpal::StreamData::Input { buffer }) => {
                                 recording_source.send_buffer(format.clone(), buffer);
                             }
-                            Err(e) => {eprintln!("{}", e)},
-                            _ => {},
+                            Err(e) => eprintln!("{}", e),
+                            _ => {}
                         }
                     }
                 } else if let Some((format, output_stream_id)) = &output_info {
                     if stream_id == *output_stream_id {
                         match stream_data {
                             Ok(cpal::StreamData::Output { ref mut buffer }) => {
-                                playback_sink.lock().unwrap().send_buffer(format.clone(), buffer);
+                                playback_sink
+                                    .lock()
+                                    .unwrap()
+                                    .send_buffer(format.clone(), buffer);
                             }
-                            Err(e) => {eprintln!("{}", e)},
-                            _ => {},
+                            Err(e) => eprintln!("{}", e),
+                            _ => {}
                         }
                     }
                 }
