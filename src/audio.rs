@@ -23,6 +23,14 @@ pub fn spawn_output_thread(output: EventReceiver<f32>) {
 }
 
 pub fn spawn_input_thread(options: Options) -> EventReceiver<f32> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        tx.send(spawn_input_thread_internal(options)).unwrap();
+    });
+    rx.recv().unwrap()
+}
+
+fn spawn_input_thread_internal(options: Options) -> EventReceiver<f32> {
     if let Some(input_file) = options.input_file() {
         let file = std::fs::File::open(input_file).unwrap();
         let mut source = StaticSource::new(BufReader::new(file), 2048, true).unwrap();
