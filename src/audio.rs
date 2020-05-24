@@ -43,9 +43,9 @@ fn spawn_input_thread_internal(options: Options) -> EventReceiver<f32> {
         let mut source = RecordingSource::new(2048);
         let host = cpal::default_host();
         let event_loop = host.event_loop();
-        let device = host.default_output_device().unwrap();
-        let format = device.default_output_format().unwrap();
-        let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
+        let device = host.default_input_device().unwrap();
+        let format = device.default_input_format().unwrap();
+        let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
         event_loop.play_stream(stream_id.clone()).unwrap();
         source.formats_mut().insert(stream_id, format);
         let output = source.output();
