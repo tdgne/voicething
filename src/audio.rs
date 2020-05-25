@@ -35,16 +35,18 @@ fn spawn_audio_thread_internal(
 ) -> (EventSender<f32>, EventReceiver<f32>) {
     let input_device_name;
     let output_device_name;
+    let chunk_size;
     {
         let config = config.lock().unwrap();
         input_device_name = config.input().clone();
         output_device_name = config.output().clone();
+        chunk_size = config.chunk_size().clone();
     }
 
     let host = cpal::default_host();
     let event_loop = host.event_loop();
 
-    let mut recording_source = RecordingSource::new(1024);
+    let mut recording_source = RecordingSource::new(chunk_size);
     let input_info = match &input_device_name {
         Some(config::Input::Device(name)) => {
             let device = host
@@ -95,7 +97,7 @@ fn spawn_audio_thread_internal(
 
     let file_rx = if let Some(config::Input::File(name)) = &input_device_name {
         let file = std::fs::File::open(name).unwrap();
-        let mut source = StaticSource::new(BufReader::new(file), 1024, true).unwrap();
+        let mut source = StaticSource::new(BufReader::new(file), chunk_size, true).unwrap();
         let output = source.output();
         thread::spawn(move || {
             source.run();

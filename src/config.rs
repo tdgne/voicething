@@ -34,6 +34,7 @@ pub enum Output {
 pub struct Config {
     input: Option<Input>,
     output: Option<Output>,
+    chunk_size: usize,
 }
 
 impl Config {
@@ -41,12 +42,13 @@ impl Config {
         options: CommandLineOptions,
         default_input: Option<Input>,
         default_output: Option<Output>,
+        chunk_size: usize,
     ) -> Self {
         let input = options
             .input_file
             .map(|file| Input::File(file))
             .or(default_input);
         let output = default_output;
-        Self { input, output }
+        Self { input, output, chunk_size }
     }
 }

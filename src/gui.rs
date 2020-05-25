@@ -21,6 +21,11 @@ pub fn main_loop(
     output: EventSender<f32>,
     config: Arc<Mutex<config::Config>>,
 ) {
+    let chunk_size;
+    {
+        let config = config.lock().unwrap();
+        chunk_size = config.chunk_size().clone();
+    }
     let system = support::init("voicething");
 
     let mut input_mtx = Multiplexer::new(input);
@@ -33,7 +38,7 @@ pub fn main_loop(
             volume: 1.0,
         }],
         AudioMetadata::new(2, 48000),
-        1024,
+        chunk_size,
     );
     let mixer_out = mixer.output();
     thread::spawn(move || {

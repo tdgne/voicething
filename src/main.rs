@@ -17,6 +17,7 @@ fn main() {
         options,
         input,
         Some(config::Output::Default),
+        1024,
     )));
     let (output_tx, input_rx) = audio::spawn_audio_thread(config.clone());
     gui::main_loop(input_rx, output_tx, config);
