@@ -3,6 +3,7 @@ use crate::stream::node::{EventReceiver, EventSender};
 use crate::stream::node::{MultipleOutputNode, Runnable};
 use getset::Getters;
 use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
 
 #[derive(Getters)]
 pub struct Multiplexer<S: Sample> {
@@ -25,17 +26,26 @@ impl<S: Sample> Multiplexer<S> {
             senders: vec![],
         }
     }
+
+    pub fn run_once(&mut self) {
+        let event = self.receiver.recv().unwrap();
+        for sender in self.senders.iter_mut().filter(|sender| sender.is_some()) {
+            if let Err(_) = sender.as_ref().map(|s| s.send(event.clone())).unwrap() {
+                // discard dead senders
+                *sender = None
+            }
+        }
+    }
+
+    pub fn set_receiver(&mut self, receiver: EventReceiver<S>) {
+        self.receiver = receiver;
+    }
 }
 
 impl<S: Sample> Runnable for Multiplexer<S> {
     fn run(&mut self) {
-        for event in self.receiver.iter() {
-            for sender in self.senders.iter_mut().filter(|sender| sender.is_some()) {
-                if let Err(_) = sender.as_ref().map(|s| s.send(event.clone())).unwrap() {
-                    // discard dead senders
-                    *sender = None
-                }
-            }
+        loop {
+            self.run_once();
         }
     }
 }

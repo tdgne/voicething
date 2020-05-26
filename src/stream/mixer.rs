@@ -17,7 +17,7 @@ pub struct Mixer<S: Sample> {
     #[getset(get = "pub", set = "pub")]
     output_format: AudioMetadata,
     #[getset(get = "pub", set = "pub")]
-    output_chunk_duration: usize,
+    max_output_chunk_duration: usize,
 }
 
 fn format_chunk_channel<S: Sample>(chunk: SampleChunk<S>, out_channels: usize) -> SampleChunk<S> {
@@ -66,13 +66,14 @@ fn format_chunk_sample_rate<S: Sample>(
         return chunk;
     }
     let out_format = AudioMetadata::new(*chunk.metadata().channels(), out_sample_rate);
+    let out_duration = (*chunk.duration_samples() as f32 / *chunk.metadata().sample_rate() as f32
+        * out_sample_rate as f32)
+        .floor() as usize;
     let mut out_chunk = SampleChunk::from_flat_samples(
-        &vec![S::zero(); chunk.metadata().channels() * chunk.duration_samples()],
+        &vec![S::zero(); chunk.metadata().channels() * out_duration],
         out_format,
     )
     .unwrap();
-    let out_duration = (*chunk.duration_samples() as f32 / *chunk.metadata().sample_rate() as f32
-        * out_sample_rate as f32) as usize;
     let channels = *chunk.metadata().channels();
     for c in 0..channels {
         let in_samples = chunk.samples(c);
@@ -80,11 +81,13 @@ fn format_chunk_sample_rate<S: Sample>(
         for i in 0..out_duration {
             out_samples[i] = in_samples[(i as f32 / out_sample_rate as f32
                 * *chunk.metadata().sample_rate() as f32)
-                as usize]
+                .floor() as usize]
         }
     }
     out_chunk
 }
+
+// TODO: add a buffer to format chunk durations
 
 impl<S: Sample> Runnable for Mixer<S> {
     fn run(&mut self) {
@@ -92,10 +95,11 @@ impl<S: Sample> Runnable for Mixer<S> {
         let out_sample_rate = *self.output_format.sample_rate();
         'outer: loop {
             let mut mixed_chunk = SampleChunk::from_flat_samples(
-                &vec![S::zero(); out_channels * self.output_chunk_duration],
+                &vec![S::zero(); out_channels * self.max_output_chunk_duration],
                 self.output_format.clone(),
             )
             .unwrap();
+            let mut duration = None;
             for rvp in self.receivers.iter().flat_map(|rvp| rvp.iter()) {
                 let volume = rvp.volume;
                 let chunk = match rvp.receiver.recv() {
@@ -115,14 +119,28 @@ impl<S: Sample> Runnable for Mixer<S> {
                     format_chunk_channel(chunk, out_channels),
                     out_sample_rate,
                 );
+
+                if let Some(duration) = duration {
+                    if duration != *formatted_chunk.duration_samples() {
+                        panic!("Input chunks have different durations.");
+                    }
+                } else {
+                    duration = Some(*formatted_chunk.duration_samples());
+                }
+
                 for c in 0..out_channels {
                     let mixed_samples = mixed_chunk.samples_mut(c);
                     let formatted_samples = formatted_chunk.samples(c);
-                    for i in 0..self.output_chunk_duration {
+                    for i in 0..formatted_samples.len() {
                         mixed_samples[i] = formatted_samples[i] * S::from_f32(volume).unwrap();
                     }
                 }
             }
+            
+            if let Some(duration) = duration {
+                mixed_chunk.truncate(duration);
+            }
+
             if let Some(ref sender) = self.sender {
                 sender.send(Event::Chunk(mixed_chunk)).unwrap();
             }
@@ -142,13 +160,13 @@ impl<S: Sample> Mixer<S> {
     pub fn new(
         receivers: Vec<ReceiverVolumePair<S>>,
         output_format: AudioMetadata,
-        output_chunk_duration: usize,
+        max_output_chunk_duration: usize,
     ) -> Self {
         Self {
             receivers: receivers.into_iter().map(|r| Some(r)).collect::<Vec<_>>(),
             sender: None,
             output_format,
-            output_chunk_duration,
+            max_output_chunk_duration, // TODO: stop relying on max_output_chunk_duration
         }
     }
 

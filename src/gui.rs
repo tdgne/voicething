@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 mod support;
+use crate::audio;
 use crate::common::AudioMetadata;
 use crate::config;
 use crate::stream::{
@@ -19,17 +20,18 @@ use crate::stream::{
 pub fn main_loop(
     input: EventReceiver<f32>,
     output: EventSender<f32>,
-    config: Arc<Mutex<config::Config>>,
+    audio_state: audio::AudioState,
 ) {
-    let chunk_size;
-    {
-        let config = config.lock().unwrap();
-        chunk_size = config.chunk_size().clone();
-    }
+    let input_device_names = audio::INPUT_DEVICE_NAMES.lock().unwrap().clone();
+    let output_device_names = audio::OUTPUT_DEVICE_NAMES.lock().unwrap().clone();
+    let audio_config = audio_state.config().clone();
     let system = support::init("voicething");
 
-    let mut input_mtx = Multiplexer::new(input);
-    let psola = Arc::new(Mutex::new(PsolaNode::new(input_mtx.new_output(), 1.0)));
+    let input_mtx = Arc::new(Mutex::new(Multiplexer::new(input)));
+    let psola = Arc::new(Mutex::new(PsolaNode::new(
+        input_mtx.lock().unwrap().new_output(),
+        1.0,
+    )));
     let psola_out = psola.lock().unwrap().output();
 
     let mut mixer = Mixer::new(
@@ -37,8 +39,10 @@ pub fn main_loop(
             receiver: psola_out,
             volume: 1.0,
         }],
-        AudioMetadata::new(2, 48000),
-        chunk_size,
+        AudioMetadata::new(2, audio_state.output_sample_rate().unwrap()),
+        (*audio_config.chunk_size() as f32 * audio_state.output_sample_rate().unwrap() as f32
+            / audio_state.input_sample_rate().unwrap_or(22050) as f32)
+            .ceil() as usize, // give a decent maximum sample duration for the buffer
     );
     let mixer_out = mixer.output();
     thread::spawn(move || {
@@ -54,12 +58,16 @@ pub fn main_loop(
         });
     }
 
-    let input_mtx_out = input_mtx.new_output();
+    let input_mtx_out = input_mtx.lock().unwrap().new_output();
     let output_mtx_out = output_mtx.new_output();
 
-    thread::spawn(move || {
-        input_mtx.run();
-    });
+    {
+        let input_mtx = input_mtx.clone();
+        thread::spawn(move || loop {
+            input_mtx.lock().unwrap().run_once();
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        });
+    }
 
     {
         let psola = psola.clone();
@@ -77,6 +85,20 @@ pub fn main_loop(
         let mut input_amplitudes = vec![];
         let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
+            ui.main_menu_bar(|| {
+                ui.menu(im_str!("Input"), true, || {
+                    for name in input_device_names.iter() {
+                        MenuItem::new(&im_str!("{}", name))
+                            .build(&ui);
+                    }
+                });
+                ui.menu(im_str!("Output"), true, || {
+                    for name in output_device_names.iter() {
+                        MenuItem::new(&im_str!("{}", name))
+                            .build(&ui);
+                    }
+                });
+            });
             Window::new(im_str!("I/O Monitor"))
                 .always_auto_resize(true)
                 .position([0.0, 0.0], Condition::FirstUseEver)

@@ -31,13 +31,13 @@ pub enum Output {
 // TODO: use wither
 #[derive(Getters, Setters, Clone)]
 #[getset(get = "pub", set = "pub")]
-pub struct Config {
+pub struct AudioConfig {
     input: Option<Input>,
     output: Option<Output>,
     chunk_size: usize,
 }
 
-impl Config {
+impl AudioConfig {
     pub fn new(
         options: CommandLineOptions,
         default_input: Option<Input>,

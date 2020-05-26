@@ -4,8 +4,6 @@ mod config;
 mod gui;
 mod stream;
 
-use std::sync::{Arc, Mutex};
-
 fn main() {
     let options = config::CommandLineOptions::parse_pub();
     let input = if let Some(filename) = options.input_file() {
@@ -13,12 +11,12 @@ fn main() {
     } else {
         Some(config::Input::Default)
     };
-    let config = Arc::new(Mutex::new(config::Config::new(
+    let config = config::AudioConfig::new(
         options,
         input,
         Some(config::Output::Default),
         1024,
-    )));
-    let (output_tx, input_rx) = audio::spawn_audio_thread(config.clone());
-    gui::main_loop(input_rx, output_tx, config);
+    );
+    let (output_tx, input_rx, state) = audio::spawn_audio_thread(None, config.clone());
+    gui::main_loop(input_rx, output_tx, state);
 }

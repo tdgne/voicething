@@ -64,6 +64,13 @@ impl<S: Sample> SampleChunk<S> {
         })
     }
 
+    pub fn truncate(&mut self, duration: usize) {
+        for channel in self.samples.iter_mut() {
+            channel.truncate(duration);
+        }
+        self.duration_samples = duration;
+    }
+
     pub fn samples(&self, channel: usize) -> &[S] {
         &self.samples[channel]
     }
