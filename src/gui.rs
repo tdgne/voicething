@@ -15,21 +15,19 @@ use crate::stream::{
     Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer, PlaybackSink,
     ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, SingleOutputNode,
 };
+use crate::audio;
 
 pub fn main_loop(
     input: EventReceiver<f32>,
     output: EventSender<f32>,
-    config: Arc<Mutex<config::Config>>,
+    audio_state: audio::AudioState,
 ) {
-    let chunk_size;
-    {
-        let config = config.lock().unwrap();
-        chunk_size = config.chunk_size().clone();
-    }
+    let audio_config = audio_state.config().clone();
+    let chunk_size = audio_config.chunk_size().clone();
     let system = support::init("voicething");
 
-    let mut input_mtx = Multiplexer::new(input);
-    let psola = Arc::new(Mutex::new(PsolaNode::new(input_mtx.new_output(), 1.0)));
+    let input_mtx = Arc::new(Mutex::new(Multiplexer::new(input)));
+    let psola = Arc::new(Mutex::new(PsolaNode::new(input_mtx.lock().unwrap().new_output(), 1.0)));
     let psola_out = psola.lock().unwrap().output();
 
     let mut mixer = Mixer::new(
@@ -37,7 +35,7 @@ pub fn main_loop(
             receiver: psola_out,
             volume: 1.0,
         }],
-        AudioMetadata::new(2, 48000),
+        AudioMetadata::new(2, audio_state.output_sample_rate().unwrap()),
         chunk_size,
     );
     let mixer_out = mixer.output();
@@ -54,12 +52,18 @@ pub fn main_loop(
         });
     }
 
-    let input_mtx_out = input_mtx.new_output();
+    let input_mtx_out = input_mtx.lock().unwrap().new_output();
     let output_mtx_out = output_mtx.new_output();
 
-    thread::spawn(move || {
-        input_mtx.run();
-    });
+    {
+        let input_mtx = input_mtx.clone();
+        thread::spawn(move || {
+            loop {
+                input_mtx.lock().unwrap().run_once();
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        });
+    }
 
     {
         let psola = psola.clone();
@@ -72,6 +76,7 @@ pub fn main_loop(
     thread::spawn(move || {
         output_mtx.run();
     });
+
 
     {
         let mut input_amplitudes = vec![];

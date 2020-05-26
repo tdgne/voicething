@@ -33,7 +33,6 @@ impl PlaybackSink {
     }
 
     pub fn send_buffer(&mut self, format: cpal::Format, output_buffer: &mut cpal::UnknownTypeOutputBuffer) {
-        println!("{:?}", format);
         match output_buffer {
             cpal::UnknownTypeOutputBuffer::F32(buffer) => {
                 self.send_buffer_f32(format, buffer);

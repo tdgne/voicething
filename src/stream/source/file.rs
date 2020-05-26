@@ -1,13 +1,13 @@
 use crate::common::*;
-use crate::stream::node::{Event, EventReceiver, EventSender};
-use crate::stream::{Runnable, SingleOutputNode};
+use crate::stream::node::{Event, EventReceiver};
+use crate::common::SampleChunk;
 use getset::Getters;
 use rodio;
 use rodio::source::Source;
 use std::error::Error;
 use std::io::{Read, Seek};
 use std::marker::PhantomData;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{SyncSender, sync_channel};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
@@ -25,7 +25,7 @@ pub struct StaticSource<R: Read + Seek + Send> {
     sleep: bool,
     #[getset(get = "pub", set = "pub")]
     repeat: bool,
-    sender: Option<EventSender<f32>>,
+    sender: Option<SyncSender<Event<f32>>>,
     phantom: PhantomData<R>,
 }
 
@@ -96,7 +96,7 @@ impl<R: Read + Seek + Send + 'static> StaticSource<R> {
     }
 
     pub fn output(&mut self) -> EventReceiver<f32> {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = sync_channel(100);
         self.sender = Some(sender);
         receiver
     }

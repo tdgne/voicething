@@ -66,25 +66,27 @@ fn format_chunk_sample_rate<S: Sample>(
         return chunk;
     }
     let out_format = AudioMetadata::new(*chunk.metadata().channels(), out_sample_rate);
+    let out_duration = (*chunk.duration_samples() as f32 / *chunk.metadata().sample_rate() as f32
+        * out_sample_rate as f32).floor() as usize;
     let mut out_chunk = SampleChunk::from_flat_samples(
-        &vec![S::zero(); chunk.metadata().channels() * chunk.duration_samples()],
+        &vec![S::zero(); chunk.metadata().channels() * out_duration],
         out_format,
     )
     .unwrap();
-    let out_duration = (*chunk.duration_samples() as f32 / *chunk.metadata().sample_rate() as f32
-        * out_sample_rate as f32) as usize;
     let channels = *chunk.metadata().channels();
     for c in 0..channels {
         let in_samples = chunk.samples(c);
         let out_samples = out_chunk.samples_mut(c);
         for i in 0..out_duration {
             out_samples[i] = in_samples[(i as f32 / out_sample_rate as f32
-                * *chunk.metadata().sample_rate() as f32)
+                * *chunk.metadata().sample_rate() as f32).floor()
                 as usize]
         }
     }
     out_chunk
 }
+
+// TODO: add a buffer to format chunk durations
 
 impl<S: Sample> Runnable for Mixer<S> {
     fn run(&mut self) {
@@ -118,7 +120,7 @@ impl<S: Sample> Runnable for Mixer<S> {
                 for c in 0..out_channels {
                     let mixed_samples = mixed_chunk.samples_mut(c);
                     let formatted_samples = formatted_chunk.samples(c);
-                    for i in 0..self.output_chunk_duration {
+                    for i in 0..formatted_samples.len() {
                         mixed_samples[i] = formatted_samples[i] * S::from_f32(volume).unwrap();
                     }
                 }
