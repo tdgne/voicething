@@ -47,7 +47,6 @@ pub fn main_loop(mut input: EventReceiver<f32>, mut output: EventSender<f32>) {
         });
     }
 
-    println!("a");
     let input_mtx_out = input_mtx.lock().unwrap().new_output();
     let output_mtx_out = output_mtx.new_output();
 
@@ -66,7 +65,6 @@ pub fn main_loop(mut input: EventReceiver<f32>, mut output: EventSender<f32>) {
             std::thread::sleep(std::time::Duration::from_millis(1));
         });
     }
-    println!("a");
 
     thread::spawn(move || {
         output_mtx.run();

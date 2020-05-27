@@ -3,6 +3,7 @@ mod common;
 mod config;
 mod gui;
 mod stream;
+mod rechunker;
 
 fn main() {
     let options = config::CommandLineOptions::parse_pub();

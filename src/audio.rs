@@ -6,6 +6,7 @@ use std::thread;
 
 use crate::common::{AudioMetadata, SampleChunk};
 use crate::config;
+use crate::rechunker::*;
 use crate::stream::{Event, EventReceiver, EventSender};
 
 pub struct StreamInfo {
@@ -21,6 +22,7 @@ pub struct Host {
     output_stream: Arc<Mutex<Option<StreamInfo>>>,
     sender: Arc<Mutex<Option<EventSender<f32>>>>,
     receiver: Arc<Mutex<Option<EventReceiver<f32>>>>,
+    rechunker: Arc<Mutex<Option<Rechunker>>>,
 }
 
 impl Host {
@@ -34,6 +36,7 @@ impl Host {
             output_stream: Arc::new(Mutex::new(None)),
             sender: Arc::new(Mutex::new(None)),
             receiver: Arc::new(Mutex::new(None)),
+            rechunker: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -74,7 +77,7 @@ impl Host {
         let stream_info = do_in_thread(move || {
             if let Some(ref info) = &*input_stream.lock().unwrap() {
                 let old_stream_id = info.stream_id.clone();
-                event_loop.pause_stream(old_stream_id.clone());
+                event_loop.pause_stream(old_stream_id.clone()).unwrap();
                 event_loop.destroy_stream(old_stream_id);
             }
             let device = host
@@ -102,7 +105,7 @@ impl Host {
         let stream_info = do_in_thread(move || {
             if let Some(ref info) = &*output_stream.lock().unwrap() {
                 let old_stream_id = info.stream_id.clone();
-                event_loop.pause_stream(old_stream_id.clone());
+                event_loop.pause_stream(old_stream_id.clone()).unwrap();
                 event_loop.destroy_stream(old_stream_id);
             }
             let device = host
@@ -120,6 +123,10 @@ impl Host {
                 device_name,
             }
         });
+        *self.rechunker.lock().unwrap() = Some(Rechunker::new(
+            stream_info.format.channels as usize,
+            stream_info.format.sample_rate.0 as usize,
+        ));
         *self.output_stream.lock().unwrap() = Some(stream_info);
     }
 
@@ -137,11 +144,13 @@ impl Host {
         let output_stream = self.output_stream.clone();
         let sender = self.sender.clone();
         let receiver = self.receiver.clone();
+        let rechunker = self.rechunker.clone();
         do_in_thread(move || {
             let input_stream = input_stream.clone();
             let output_stream = output_stream.clone();
             let sender = sender.clone();
             let receiver = receiver.clone();
+            let rechunker = rechunker.clone();
             event_loop.run(move |stream_id, mut stream_data| {
                 if let Some(StreamInfo {
                     stream_id: ref input_stream_id,
@@ -172,10 +181,19 @@ impl Host {
                         match &mut stream_data {
                             Ok(cpal::StreamData::Output { ref mut buffer }) => {
                                 if let Some(ref receiver) = &*receiver.lock().unwrap() {
-                                    if let Event::Chunk(chunk) = receiver.recv().unwrap() {
-                                        write_chunk_to_buffer(chunk, buffer);
-                                    } else {
-                                        unimplemented!()
+                                    if let Ok(Event::Chunk(chunk)) =
+                                        receiver.recv_timeout(std::time::Duration::from_millis(100))
+                                    {
+                                        if let Some(ref mut rechunker) =
+                                            &mut *rechunker.lock().unwrap()
+                                        {
+                                            rechunker.feed_chunk(chunk);
+                                            while let Some(chunk) = rechunker
+                                                .pull_chunk(buffer.len() / format.channels as usize)
+                                            {
+                                                write_chunk_to_buffer(chunk, buffer);
+                                            }
+                                        }
                                     }
                                 }
                             }

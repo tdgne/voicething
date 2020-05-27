@@ -18,6 +18,7 @@ pub struct Mixer<S: Sample> {
     output_format: AudioMetadata,
     #[getset(get = "pub", set = "pub")]
     max_output_chunk_duration: usize,
+    buffer: Vec<S>,
 }
 
 fn format_chunk_channel<S: Sample>(chunk: SampleChunk<S>, out_channels: usize) -> SampleChunk<S> {
@@ -87,13 +88,17 @@ fn format_chunk_sample_rate<S: Sample>(
     out_chunk
 }
 
-// TODO: add a buffer to format chunk durations
+impl<S: Sample> Mixer<S> {
+    pub fn run(&mut self) {
+        loop {
+            self.run_once(1024);
+        }
+    }
 
-impl<S: Sample> Runnable for Mixer<S> {
-    fn run(&mut self) {
+    pub fn run_once(&mut self, out_duration: usize) {
         let out_channels = *self.output_format.channels();
         let out_sample_rate = *self.output_format.sample_rate();
-        'outer: loop {
+        while self.buffer.len() < out_duration * out_channels {
             let mut mixed_chunk = SampleChunk::from_flat_samples(
                 &vec![S::zero(); out_channels * self.max_output_chunk_duration],
                 self.output_format.clone(),
@@ -109,7 +114,7 @@ impl<S: Sample> Runnable for Mixer<S> {
                             if let Some(ref sender) = self.sender {
                                 sender.send(Event::Stop).unwrap();
                             }
-                            break 'outer;
+                            return;
                         }
                     },
                     Err(_) => panic!("An error occurred in Mixer"),
@@ -136,27 +141,35 @@ impl<S: Sample> Runnable for Mixer<S> {
                     }
                 }
             }
-            
+
             if let Some(duration) = duration {
                 mixed_chunk.truncate(duration);
             }
 
-            if let Some(ref sender) = self.sender {
-                sender.send(Event::Chunk(mixed_chunk)).unwrap();
-            }
+            self.buffer.append(&mut mixed_chunk.flattened_samples());
+        }
+
+        let chunk = SampleChunk::from_flat_samples(
+            &self.buffer[0..out_duration * out_channels],
+            AudioMetadata::new(out_channels, out_sample_rate),
+        )
+        .unwrap();
+
+        if let Some(ref sender) = self.sender {
+            sender.send(Event::Chunk(chunk)).unwrap();
         }
     }
-}
 
-impl<S: Sample> SingleOutputNode<S> for Mixer<S> {
-    fn output(&mut self) -> EventReceiver<S> {
+    pub fn output(&mut self) -> EventReceiver<S> {
         let (sender, receiver) = channel();
         self.sender = Some(sender);
         receiver
     }
-}
 
-impl<S: Sample> Mixer<S> {
+    pub fn add_receiver(&mut self, receiver: EventReceiver<S>, volume: f32) {
+        self.receivers.push(Some(ReceiverVolumePair{receiver, volume}));
+    }
+
     pub fn new(
         receivers: Vec<ReceiverVolumePair<S>>,
         output_format: AudioMetadata,
@@ -167,6 +180,7 @@ impl<S: Sample> Mixer<S> {
             sender: None,
             output_format,
             max_output_chunk_duration, // TODO: stop relying on max_output_chunk_duration
+            buffer: vec![],
         }
     }
 
