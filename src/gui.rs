@@ -15,15 +15,7 @@ use crate::stream::{
     ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, SingleOutputNode,
 };
 
-pub fn main_loop(
-    mut input: EventReceiver<f32>,
-    mut output: EventSender<f32>,
-    mut audio_state: audio::AudioState,
-) {
-    let input_device_names = audio::INPUT_DEVICE_NAMES.lock().unwrap().clone();
-    let output_device_names = audio::OUTPUT_DEVICE_NAMES.lock().unwrap().clone();
-
-    let audio_config = audio_state.config().clone();
+pub fn main_loop(mut input: EventReceiver<f32>, mut output: EventSender<f32>) {
     let system = support::init("voicething");
 
     let input_mtx = Arc::new(Mutex::new(Multiplexer::new(input)));
@@ -38,10 +30,8 @@ pub fn main_loop(
             receiver: psola_out,
             volume: 1.0,
         }],
-        AudioMetadata::new(2, audio_state.output_sample_rate().unwrap()),
-        (*audio_config.chunk_size() as f32 * audio_state.output_sample_rate().unwrap() as f32
-            / audio_state.input_sample_rate().unwrap_or(22050) as f32)
-            .ceil() as usize, // give a decent maximum sample duration for the buffer
+        AudioMetadata::new(2, 44100),
+        1024,
     );
     let mixer_out = mixer.output();
     thread::spawn(move || {
@@ -57,6 +47,7 @@ pub fn main_loop(
         });
     }
 
+    println!("a");
     let input_mtx_out = input_mtx.lock().unwrap().new_output();
     let output_mtx_out = output_mtx.new_output();
 
@@ -75,6 +66,7 @@ pub fn main_loop(
             std::thread::sleep(std::time::Duration::from_millis(1));
         });
     }
+    println!("a");
 
     thread::spawn(move || {
         output_mtx.run();
