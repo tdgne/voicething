@@ -7,16 +7,16 @@ mod stream;
 fn main() {
     let options = config::CommandLineOptions::parse_pub();
     let input = if let Some(filename) = options.input_file() {
-        Some(config::Input::File(filename.clone()))
+        Some(audio::Input::File(filename.clone()))
     } else {
-        Some(config::Input::Default)
+        Some(audio::Input::Default)
     };
-    let config = config::AudioConfig::new(
+    let config = audio::AudioConfig::new(
         options,
         input,
-        Some(config::Output::Default),
+        Some(audio::Output::Default),
         1024,
     );
-    let (output_tx, input_rx, state) = audio::spawn_audio_thread(None, config.clone());
+    let (output_tx, input_rx, state) = audio::configure_audio_thread(None, config.clone());
     gui::main_loop(input_rx, output_tx, state);
 }

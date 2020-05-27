@@ -4,26 +4,25 @@ use glium::{
     Texture2d,
 };
 use imgui::*;
-use rodio::DeviceTrait;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 mod support;
 use crate::audio;
 use crate::common::AudioMetadata;
-use crate::config;
 use crate::stream::{
     Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer, PlaybackSink,
     ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, SingleOutputNode,
 };
 
 pub fn main_loop(
-    input: EventReceiver<f32>,
-    output: EventSender<f32>,
-    audio_state: audio::AudioState,
+    mut input: EventReceiver<f32>,
+    mut output: EventSender<f32>,
+    mut audio_state: audio::AudioState,
 ) {
     let input_device_names = audio::INPUT_DEVICE_NAMES.lock().unwrap().clone();
     let output_device_names = audio::OUTPUT_DEVICE_NAMES.lock().unwrap().clone();
+
     let audio_config = audio_state.config().clone();
     let system = support::init("voicething");
 
@@ -85,20 +84,6 @@ pub fn main_loop(
         let mut input_amplitudes = vec![];
         let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
-            ui.main_menu_bar(|| {
-                ui.menu(im_str!("Input"), true, || {
-                    for name in input_device_names.iter() {
-                        MenuItem::new(&im_str!("{}", name))
-                            .build(&ui);
-                    }
-                });
-                ui.menu(im_str!("Output"), true, || {
-                    for name in output_device_names.iter() {
-                        MenuItem::new(&im_str!("{}", name))
-                            .build(&ui);
-                    }
-                });
-            });
             Window::new(im_str!("I/O Monitor"))
                 .always_auto_resize(true)
                 .position([0.0, 0.0], Condition::FirstUseEver)

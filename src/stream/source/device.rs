@@ -29,7 +29,7 @@ impl RecordingSource {
         &mut self.formats
     }
 
-    pub fn send_buffer(&mut self, format: cpal::Format, buffer: cpal::UnknownTypeInputBuffer) {
+    pub fn send_buffer(&mut self, format: cpal::Format, buffer: &cpal::UnknownTypeInputBuffer) {
         let sender = self.sender.as_mut().unwrap();
         let metadata =
             AudioMetadata::new(format.channels as usize, format.sample_rate.0 as usize);
