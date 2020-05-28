@@ -18,6 +18,7 @@ use crate::audio::stream::{
 
 pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
     let system = support::init("voicething");
+    
 
     let rechunker = Arc::new(Mutex::new(Rechunker::new(2, 44100)));
     let (rechunk_tx, rechunk_rx) = event_channel();

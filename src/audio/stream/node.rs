@@ -33,7 +33,7 @@ pub trait ProcessNode<S: Sample> {
     fn process_chunk(&mut self, chunk: SampleChunk<S>) -> SampleChunk<S>;
 
     fn run_once(&mut self) {
-        let chunk = match self.receiver().recv() {
+        let chunk = match self.receiver().try_recv() {
             Ok(Event::Chunk(chunk)) => chunk,
             Ok(Event::Stop) => {
                 if let Some(sender) = self.sender() {
@@ -41,7 +41,7 @@ pub trait ProcessNode<S: Sample> {
                 }
                 return
             },
-            Err(_) => panic!("Error occurred during run()")
+            Err(_) => return,
         };
         let chunk = self.process_chunk(chunk);
         if let Some(sender) = self.sender() {

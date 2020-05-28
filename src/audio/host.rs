@@ -60,14 +60,14 @@ impl Host {
         })
     }
 
-    pub fn default_input_device_name(&self) -> String {
+    pub fn default_input_device_name(&self) -> Option<String> {
         let host = self.host.clone();
-        do_in_thread(move || host.default_input_device().unwrap().name().unwrap())
+        do_in_thread(move || host.default_input_device().map(|d| d.name().unwrap()))
     }
 
-    pub fn default_output_device_name(&self) -> String {
+    pub fn default_output_device_name(&self) -> Option<String> {
         let host = self.host.clone();
-        do_in_thread(move || host.default_output_device().unwrap().name().unwrap())
+        do_in_thread(move || host.default_output_device().map(|d| d.name().unwrap()))
     }
 
     pub fn use_input_stream_from_device_name(&self, name: String) {

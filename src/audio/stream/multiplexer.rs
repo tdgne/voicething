@@ -28,11 +28,12 @@ impl<S: Sample> Multiplexer<S> {
     }
 
     pub fn run_once(&mut self) {
-        let event = self.receiver.recv().unwrap();
-        for sender in self.senders.iter_mut().filter(|sender| sender.is_some()) {
-            if let Err(_) = sender.as_ref().map(|s| s.send(event.clone())).unwrap() {
-                // discard dead senders
-                *sender = None
+        if let Ok(event) = self.receiver.try_recv() {
+            for sender in self.senders.iter_mut().filter(|sender| sender.is_some()) {
+                if let Err(_) = sender.as_ref().map(|s| s.send(event.clone())).unwrap() {
+                    // discard dead senders
+                    *sender = None
+                }
             }
         }
     }

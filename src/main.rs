@@ -19,12 +19,14 @@ fn main() {
     let (tx_in, rx_in) = audio::stream::event_sync_channel(buffer);
     let (tx_out, rx_out) = audio::stream::event_channel();
     let host = audio::Host::new();
-    let default_input_device_name = host.default_input_device_name();
-    host.use_input_stream_from_device_name(default_input_device_name);
-    host.set_sender(Some(tx_in));
-    let default_output_device_name = host.default_output_device_name();
-    host.use_output_stream_from_device_name(default_output_device_name);
+    if let Some(default_output_device_name) = host.default_output_device_name() {
+        host.use_output_stream_from_device_name(default_output_device_name);
+    }
     host.set_receiver(Some(rx_out));
+    if let Some(default_input_device_name) = host.default_input_device_name() {
+        host.use_input_stream_from_device_name(default_input_device_name);
+    }
+    host.set_sender(Some(tx_in));
     host.run();
     gui::main_loop(rx_in, tx_out);
 }
