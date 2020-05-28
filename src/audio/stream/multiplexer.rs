@@ -1,6 +1,6 @@
-use crate::common::*;
-use crate::stream::node::{EventReceiver, EventSender};
-use crate::stream::node::{MultipleOutputNode, Runnable};
+use crate::audio::common::*;
+use crate::audio::stream::node::{EventReceiver, EventSender};
+use crate::audio::stream::node::{MultipleOutputNode, Runnable};
 use getset::Getters;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};

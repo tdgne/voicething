@@ -1,6 +1,7 @@
-use crate::common::*;
-use crate::stream::node::{Event, EventReceiver, EventSender};
-use crate::stream::node::{Runnable, SingleOutputNode};
+use crate::audio::common::*;
+use crate::audio::stream::node::{Event, EventReceiver, EventSender};
+use crate::audio::stream::node::{Runnable, SingleOutputNode};
+use crate::audio::rechunker::{format_chunk_channel, format_chunk_sample_rate};
 use getset::Getters;
 use std::sync::mpsc::channel;
 
@@ -19,73 +20,6 @@ pub struct Mixer<S: Sample> {
     #[getset(get = "pub", set = "pub")]
     max_output_chunk_duration: usize,
     buffer: Vec<S>,
-}
-
-fn format_chunk_channel<S: Sample>(chunk: SampleChunk<S>, out_channels: usize) -> SampleChunk<S> {
-    let out_format = AudioMetadata::new(out_channels, *chunk.metadata().sample_rate());
-    let mut out_chunk = SampleChunk::from_flat_samples(
-        &vec![S::zero(); out_channels * chunk.duration_samples()],
-        out_format,
-    )
-    .unwrap();
-    let chunk_channels = *chunk.metadata().channels();
-    match out_channels {
-        1 => {
-            for c in 0..chunk_channels {
-                for (i, out_chunk_samples) in out_chunk.samples_mut(c).iter_mut().enumerate() {
-                    *out_chunk_samples +=
-                        chunk.samples(0)[i] * S::from_f32(1.0 / chunk_channels as f32).unwrap();
-                }
-            }
-        }
-        2 => {
-            if chunk_channels == 1 {
-                for (i, sample) in chunk.samples(0).iter().enumerate() {
-                    out_chunk.samples_mut(0)[i] = *sample * S::from_f32(1.0).unwrap();
-                    out_chunk.samples_mut(1)[i] = *sample * S::from_f32(1.0).unwrap();
-                }
-            } else if chunk_channels == 2 {
-                for c in 0..chunk_channels {
-                    for (i, sample) in chunk.samples(c).iter().enumerate() {
-                        out_chunk.samples_mut(c)[i] = *sample * S::from_f32(1.0).unwrap();
-                    }
-                }
-            } else {
-                unimplemented!()
-            }
-        }
-        _ => unimplemented!(),
-    }
-    out_chunk
-}
-
-fn format_chunk_sample_rate<S: Sample>(
-    chunk: SampleChunk<S>,
-    out_sample_rate: usize,
-) -> SampleChunk<S> {
-    if out_sample_rate == *chunk.metadata().sample_rate() {
-        return chunk;
-    }
-    let out_format = AudioMetadata::new(*chunk.metadata().channels(), out_sample_rate);
-    let out_duration = (*chunk.duration_samples() as f32 / *chunk.metadata().sample_rate() as f32
-        * out_sample_rate as f32)
-        .floor() as usize;
-    let mut out_chunk = SampleChunk::from_flat_samples(
-        &vec![S::zero(); chunk.metadata().channels() * out_duration],
-        out_format,
-    )
-    .unwrap();
-    let channels = *chunk.metadata().channels();
-    for c in 0..channels {
-        let in_samples = chunk.samples(c);
-        let out_samples = out_chunk.samples_mut(c);
-        for i in 0..out_duration {
-            out_samples[i] = in_samples[(i as f32 / out_sample_rate as f32
-                * *chunk.metadata().sample_rate() as f32)
-                .floor() as usize]
-        }
-    }
-    out_chunk
 }
 
 impl<S: Sample> Mixer<S> {

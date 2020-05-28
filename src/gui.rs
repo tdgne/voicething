@@ -9,9 +9,9 @@ use std::thread;
 
 mod support;
 use crate::audio;
-use crate::rechunker::Rechunker;
-use crate::common::AudioMetadata;
-use crate::stream::{
+use crate::audio::rechunker::Rechunker;
+use crate::audio::common::AudioMetadata;
+use crate::audio::stream::{
     Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer,
     ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, event_channel
 };

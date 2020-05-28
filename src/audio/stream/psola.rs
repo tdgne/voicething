@@ -1,5 +1,5 @@
-use crate::common::*;
-use crate::stream::node::{EventReceiver, EventSender, ProcessNode};
+use crate::audio::common::*;
+use crate::audio::stream::node::{EventReceiver, EventSender, ProcessNode};
 use getset::Getters;
 use rustfft::num_complex::Complex32;
 use rustfft::FFTplanner;

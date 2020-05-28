@@ -1,6 +1,5 @@
-use crate::common::*;
-use crate::stream::node::{Event, EventReceiver};
-use crate::common::SampleChunk;
+use crate::audio::common::*;
+use crate::audio::stream::node::{Event, EventReceiver};
 use getset::Getters;
 use rodio;
 use rodio::source::Source;

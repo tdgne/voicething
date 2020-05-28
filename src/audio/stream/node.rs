@@ -1,4 +1,4 @@
-use crate::common::{Sample, SampleChunk};
+use crate::audio::common::{Sample, SampleChunk};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
 
 #[derive(Clone)]

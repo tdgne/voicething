@@ -1,6 +1,6 @@
-use crate::common::*;
-use crate::stream::node::{Event, EventReceiver, EventSender};
-use crate::stream::node::{Runnable, SingleOutputNode};
+use crate::audio::common::*;
+use crate::audio::stream::node::{Event, EventReceiver, EventSender};
+use crate::audio::stream::node::{Runnable, SingleOutputNode};
 use getset::Getters;
 use std::sync::mpsc::channel;
 use std::collections::VecDeque;
@@ -11,7 +11,7 @@ pub struct Rechunker {
     out_sample_rate: usize,
 }
 
-fn format_chunk_channel<S: Sample>(chunk: SampleChunk<S>, out_channels: usize) -> SampleChunk<S> {
+pub fn format_chunk_channel<S: Sample>(chunk: SampleChunk<S>, out_channels: usize) -> SampleChunk<S> {
     let out_format = AudioMetadata::new(out_channels, *chunk.metadata().sample_rate());
     let mut out_chunk = SampleChunk::from_flat_samples(
         &vec![S::zero(); out_channels * chunk.duration_samples()],
@@ -49,7 +49,7 @@ fn format_chunk_channel<S: Sample>(chunk: SampleChunk<S>, out_channels: usize) -
     out_chunk
 }
 
-fn format_chunk_sample_rate<S: Sample>(
+pub fn format_chunk_sample_rate<S: Sample>(
     chunk: SampleChunk<S>,
     out_sample_rate: usize,
 ) -> SampleChunk<S> {
