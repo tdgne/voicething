@@ -9,6 +9,7 @@ use crate::config;
 use crate::audio::rechunker::*;
 use crate::audio::stream::{Event, EventReceiver, EventSyncSender};
 
+#[derive(Clone)]
 pub struct StreamInfo {
     stream_id: cpal::StreamId,
     format: cpal::Format,
@@ -38,6 +39,14 @@ impl Host {
             receiver: Arc::new(Mutex::new(None)),
             rechunker: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn current_input_device_name(&self) -> Option<String> {
+        self.input_stream.lock().unwrap().as_ref().map(|s| s.device_name.clone())
+    }
+
+    pub fn current_output_device_name(&self) -> Option<String> {
+        self.output_stream.lock().unwrap().as_ref().map(|s| s.device_name.clone())
     }
 
     pub fn input_device_names(&self) -> Vec<String> {

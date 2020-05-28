@@ -16,7 +16,7 @@ use crate::audio::stream::{
     ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, event_channel
 };
 
-pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
+pub fn main_loop(host: audio::Host, input: EventReceiver<f32>, output: EventSender<f32>) {
     let system = support::init("voicething");
     
 
@@ -75,14 +75,42 @@ pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
         let mut input_amplitudes = vec![];
         let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
+            let current_input_device_name = host.current_input_device_name();
+            let current_output_device_name = host.current_output_device_name();
+            ui.main_menu_bar(|| {
+                ui.menu(im_str!("Devices"), true, || {
+                    ui.menu(im_str!("Input"), true, || {
+                        for name in host.input_device_names().iter() {
+                            let mut selected = current_input_device_name.clone().map(|n| n == *name).unwrap_or(false);
+                            let was_selected = selected;
+                            MenuItem::new(&im_str!("{}", name))
+                                .build_with_ref(&ui, &mut selected);
+                            if !was_selected && selected {
+                                host.use_input_stream_from_device_name(name.clone());
+                            }
+                        }
+                    });
+                    ui.menu(im_str!("Output"), true, || {
+                        for name in host.output_device_names().iter() {
+                            let mut selected = current_output_device_name.clone().map(|n| n == *name).unwrap_or(false);
+                            let was_selected = selected;
+                            MenuItem::new(&im_str!("{}", name))
+                                .build_with_ref(&ui, &mut selected);
+                            if !was_selected && selected {
+                                host.use_output_stream_from_device_name(name.clone());
+                            }
+                        }
+                    });
+                });
+            });
             Window::new(im_str!("I/O Monitor"))
                 .always_auto_resize(true)
                 .position([0.0, 0.0], Condition::FirstUseEver)
                 .build(&ui, || {
-                    if let Ok(Event::Chunk(chunk)) = input_mtx_out.try_recv() {
+                    while let Ok(Event::Chunk(chunk)) = input_mtx_out.try_recv() {
                         input_amplitudes = chunk.samples(0).to_vec();
                     }
-                    if let Ok(Event::Chunk(chunk)) = output_mtx_out.try_recv() {
+                    while let Ok(Event::Chunk(chunk)) = output_mtx_out.try_recv() {
                         output_amplitudes = chunk.samples(0).to_vec();
                     }
                     ui.plot_lines(im_str!(""), &input_amplitudes)

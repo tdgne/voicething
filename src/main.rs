@@ -28,5 +28,5 @@ fn main() {
     }
     host.set_sender(Some(tx_in));
     host.run();
-    gui::main_loop(rx_in, tx_out);
+    gui::main_loop(host, rx_in, tx_out);
 }
