@@ -9,36 +9,35 @@ use std::thread;
 
 mod support;
 use crate::audio;
+use crate::rechunker::Rechunker;
 use crate::common::AudioMetadata;
 use crate::stream::{
-    Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer, PlaybackSink,
-    ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, SingleOutputNode,
+    Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer,
+    ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, event_channel
 };
 
-pub fn main_loop(mut input: EventReceiver<f32>, mut output: EventSender<f32>) {
+pub fn main_loop(input: EventReceiver<f32>, output: EventSender<f32>) {
     let system = support::init("voicething");
 
-    let input_mtx = Arc::new(Mutex::new(Multiplexer::new(input)));
+    let rechunker = Arc::new(Mutex::new(Rechunker::new(2, 44100)));
+    let (rechunk_tx, rechunk_rx) = event_channel();
+    thread::spawn(move || loop {
+        if let Event::Chunk(chunk) = input.recv().unwrap() {
+            rechunker.lock().unwrap().feed_chunk(chunk);
+        }
+        while let Some(chunk) = rechunker.lock().unwrap().pull_chunk(1024) {
+            rechunk_tx.send(Event::Chunk(chunk)).unwrap();
+        }
+    });
+
+    let input_mtx = Arc::new(Mutex::new(Multiplexer::new(rechunk_rx)));
     let psola = Arc::new(Mutex::new(PsolaNode::new(
         input_mtx.lock().unwrap().new_output(),
         1.0,
     )));
     let psola_out = psola.lock().unwrap().output();
 
-    let mut mixer = Mixer::new(
-        vec![ReceiverVolumePair {
-            receiver: psola_out,
-            volume: 1.0,
-        }],
-        AudioMetadata::new(2, 44100),
-        1024,
-    );
-    let mixer_out = mixer.output();
-    thread::spawn(move || {
-        mixer.run();
-    });
-
-    let mut output_mtx = Multiplexer::new(mixer_out);
+    let mut output_mtx = Multiplexer::new(psola_out);
 
     {
         let output_mtx_out = output_mtx.new_output();
@@ -50,6 +49,7 @@ pub fn main_loop(mut input: EventReceiver<f32>, mut output: EventSender<f32>) {
     let input_mtx_out = input_mtx.lock().unwrap().new_output();
     let output_mtx_out = output_mtx.new_output();
 
+    
     {
         let input_mtx = input_mtx.clone();
         thread::spawn(move || loop {

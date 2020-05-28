@@ -1,5 +1,5 @@
 use crate::common::{Sample, SampleChunk};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
 
 #[derive(Clone)]
 pub enum Event<S: Sample> {
@@ -9,10 +9,16 @@ pub enum Event<S: Sample> {
 
 pub type EventSender<S> = Sender<Event<S>>;
 
+pub type EventSyncSender<S> = SyncSender<Event<S>>;
+
 pub type EventReceiver<S> = Receiver<Event<S>>;
 
 pub fn event_channel<S: Sample>() -> (EventSender<S>, EventReceiver<S>) {
     channel()
+}
+
+pub fn event_sync_channel<S: Sample>(n: usize) -> (EventSyncSender<S>, EventReceiver<S>) {
+    sync_channel(n)
 }
 
 pub trait Runnable: Send {

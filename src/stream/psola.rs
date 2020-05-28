@@ -106,6 +106,9 @@ impl PsolaNode {
                 while i >= data.len() as isize {
                     i -= in_period as isize;
                 }
+                if i < 0 {
+                    panic!("too short data");
+                }
                 data[i as usize]
             };
             let d = i - in_center;

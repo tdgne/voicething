@@ -7,7 +7,7 @@ use std::thread;
 use crate::common::{AudioMetadata, SampleChunk};
 use crate::config;
 use crate::rechunker::*;
-use crate::stream::{Event, EventReceiver, EventSender};
+use crate::stream::{Event, EventReceiver, EventSyncSender};
 
 pub struct StreamInfo {
     stream_id: cpal::StreamId,
@@ -20,7 +20,7 @@ pub struct Host {
     event_loop: Arc<cpal::EventLoop>,
     input_stream: Arc<Mutex<Option<StreamInfo>>>,
     output_stream: Arc<Mutex<Option<StreamInfo>>>,
-    sender: Arc<Mutex<Option<EventSender<f32>>>>,
+    sender: Arc<Mutex<Option<mpsc::SyncSender<Event<f32>>>>>,
     receiver: Arc<Mutex<Option<EventReceiver<f32>>>>,
     rechunker: Arc<Mutex<Option<Rechunker>>>,
 }
@@ -130,7 +130,7 @@ impl Host {
         *self.output_stream.lock().unwrap() = Some(stream_info);
     }
 
-    pub fn set_sender(&self, sender: Option<EventSender<f32>>) {
+    pub fn set_sender(&self, sender: Option<EventSyncSender<f32>>) {
         *self.sender.lock().unwrap() = sender;
     }
 
@@ -145,7 +145,7 @@ impl Host {
         let sender = self.sender.clone();
         let receiver = self.receiver.clone();
         let rechunker = self.rechunker.clone();
-        do_in_thread(move || {
+        thread::spawn(move || {
             let input_stream = input_stream.clone();
             let output_stream = output_stream.clone();
             let sender = sender.clone();
@@ -163,7 +163,7 @@ impl Host {
                             Ok(cpal::StreamData::Input { buffer }) => {
                                 if let Some(ref sender) = &*sender.lock().unwrap() {
                                     let chunk = chunk_from_buffer(format.clone(), buffer);
-                                    sender.send(Event::Chunk(chunk)).unwrap();
+                                    sender.try_send(Event::Chunk(chunk));
                                 }
                             }
                             Err(e) => eprintln!("{}", e),
@@ -181,18 +181,19 @@ impl Host {
                         match &mut stream_data {
                             Ok(cpal::StreamData::Output { ref mut buffer }) => {
                                 if let Some(ref receiver) = &*receiver.lock().unwrap() {
-                                    if let Ok(Event::Chunk(chunk)) =
-                                        receiver.recv_timeout(std::time::Duration::from_millis(100))
-                                    {
+                                    while let Ok(Event::Chunk(chunk)) = receiver.try_recv() {
                                         if let Some(ref mut rechunker) =
                                             &mut *rechunker.lock().unwrap()
                                         {
                                             rechunker.feed_chunk(chunk);
-                                            while let Some(chunk) = rechunker
-                                                .pull_chunk(buffer.len() / format.channels as usize)
-                                            {
-                                                write_chunk_to_buffer(chunk, buffer);
-                                            }
+                                        }
+                                    }
+                                    if let Some(ref mut rechunker) = &mut *rechunker.lock().unwrap()
+                                    {
+                                        if let Some(chunk) = rechunker
+                                            .pull_chunk(buffer.len() / format.channels as usize)
+                                        {
+                                            write_chunk_to_buffer(chunk, buffer);
                                         }
                                     }
                                 }
