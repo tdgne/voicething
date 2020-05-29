@@ -54,7 +54,7 @@ impl Host {
         do_in_thread(move || {
             host.input_devices()
                 .unwrap()
-                .map(|d| d.name().unwrap())
+                .flat_map(|d| d.name().ok())
                 .collect::<Vec<_>>()
         })
     }
@@ -64,7 +64,7 @@ impl Host {
         do_in_thread(move || {
             host.output_devices()
                 .unwrap()
-                .map(|d| d.name().unwrap())
+                .flat_map(|d| d.name().ok()) // FIXME: mac's multiple output devices will be discarded here
                 .collect::<Vec<_>>()
         })
     }
