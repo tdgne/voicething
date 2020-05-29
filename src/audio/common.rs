@@ -1,6 +1,7 @@
 use derive_new::new;
 use getset::Getters;
 use rustfft::num_traits::{FromPrimitive, Num, NumAssignOps, NumCast, NumOps};
+use rustfft::num_complex::Complex32;
 
 #[derive(Getters, Clone, Debug, new)]
 #[getset(get = "pub")]
@@ -30,6 +31,7 @@ pub trait Sample:
 }
 
 impl Sample for f32 {}
+impl Sample for Complex32 {}
 
 #[derive(Getters, Clone, Debug, new)]
 pub struct SampleChunk<S: Sample> {
@@ -93,3 +95,24 @@ impl<S: Sample> SampleChunk<S> {
         flattened
     }
 }
+
+#[derive(Clone, Debug)]
+pub enum WindowFunction {
+    Hanning,
+    Rectangular
+}
+
+#[derive(Getters, Clone, Debug, new)]
+pub struct WindowedSampleChunk<S: Sample> {
+    #[getset(get = "pub")]
+    chunk: SampleChunk<S>,
+    #[getset(get_copy = "pub")]
+    window_function: WindowFunction,
+    #[getset(get_copy = "pub")]
+    delay: usize,
+}
+
+pub trait Chunk<S: Sample>: Clone {}
+impl<S: Sample> Chunk<S> for SampleChunk<S> {}
+impl<S: Sample> Chunk<S> for WindowedSampleChunk<S> {}
+

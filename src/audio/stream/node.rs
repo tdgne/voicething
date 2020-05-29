@@ -1,59 +1,62 @@
-use crate::audio::common::{Sample, SampleChunk};
+use crate::audio::common::{Sample, SampleChunk, WindowedSampleChunk, Chunk};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
+use rustfft::num_complex::Complex32;
+use uuid::Uuid;
 
-#[derive(Clone)]
-pub enum Event<S: Sample> {
-    Chunk(SampleChunk<S>),
-    Stop,
-}
+pub type ChunkSender<S> = Sender<SampleChunk<S>>;
 
-pub type EventSender<S> = Sender<Event<S>>;
+pub type SyncChunkSender<S> = SyncSender<SampleChunk<S>>;
 
-pub type EventSyncSender<S> = SyncSender<Event<S>>;
+pub type ChunkReceiver<S> = Receiver<SampleChunk<S>>;
 
-pub type EventReceiver<S> = Receiver<Event<S>>;
 
-pub fn event_channel<S: Sample>() -> (EventSender<S>, EventReceiver<S>) {
+pub fn chunk_channel<S: Sample>() -> (ChunkSender<S>, ChunkReceiver<S>) {
     channel()
 }
 
-pub fn event_sync_channel<S: Sample>(n: usize) -> (EventSyncSender<S>, EventReceiver<S>) {
+pub fn sync_chunk_channel<S: Sample>(n: usize) -> (SyncChunkSender<S>, ChunkReceiver<S>) {
     sync_channel(n)
 }
 
-pub trait Runnable: Send {
-    fn run(&mut self);
+pub trait HasId {
+    fn id(&self) -> Uuid;
 }
 
-pub trait ProcessNode<S: Sample> {
-    fn receiver(&self) -> &EventReceiver<S>;
+pub trait SingleInput<S: Sample, T: Sample, I: Chunk<S>, O: Chunk<T>>: HasId {
+    fn input(&self) -> Option<&Receiver<I>>;
 
-    fn sender(&self) -> Option<EventSender<S>>;
+    fn outputs(&self) -> &[Sender<O>];
 
-    fn process_chunk(&mut self, chunk: SampleChunk<S>) -> SampleChunk<S>;
+    fn set_input(&mut self, rx: Receiver<I>);
+
+    fn add_output(&mut self, tx: Sender<O>);
+
+    fn process_chunk(&mut self, chunk: I) -> O;
 
     fn run_once(&mut self) {
-        let chunk = match self.receiver().try_recv() {
-            Ok(Event::Chunk(chunk)) => chunk,
-            Ok(Event::Stop) => {
-                if let Some(sender) = self.sender() {
-                    sender.send(Event::Stop).unwrap();
+        if let Some(input) = self.input() {
+            if let Some(chunk) = input.try_recv().ok() {
+                let chunk = self.process_chunk(chunk);
+                for output in self.outputs().iter() {
+                    let _ = output.send(chunk.clone());
                 }
-                return
-            },
-            Err(_) => return,
-        };
-        let chunk = self.process_chunk(chunk);
-        if let Some(sender) = self.sender() {
-            sender.send(Event::Chunk(chunk)).unwrap();
+            }
         }
     }
 }
 
-pub trait SingleOutputNode<S: Sample>: Runnable {
-    fn output(&mut self) -> EventReceiver<S>;
+pub enum SingleInputNode {
+    Real(Box<dyn SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>>>),
+    Complex(Box<dyn SingleInput<Complex32, Complex32, SampleChunk<Complex32>, SampleChunk<Complex32>>>),
+    WindowedReal(Box<dyn SingleInput<f32, f32, WindowedSampleChunk<f32>, WindowedSampleChunk<f32>>>),
+    WindowedComplex(Box<dyn SingleInput<Complex32, Complex32, SampleChunk<Complex32>, SampleChunk<Complex32>>>),
+    RealComplex(Box<dyn SingleInput<f32, Complex32, SampleChunk<f32>, SampleChunk<Complex32>>>),
+    ComplexReal(Box<dyn SingleInput<Complex32, f32, SampleChunk<Complex32>, SampleChunk<f32>>>),
+    WindowedRealComplex(Box<dyn SingleInput<f32, Complex32, WindowedSampleChunk<f32>, WindowedSampleChunk<Complex32>>>),
+    WindowedComplexReal(Box<dyn SingleInput<Complex32, f32, SampleChunk<Complex32>, SampleChunk<f32>>>),
 }
 
-pub trait MultipleOutputNode<S: Sample>: Runnable {
-    fn new_output(&mut self) -> EventReceiver<S>;
+pub enum Node {
+    SingleInput(SingleInputNode),
 }
+

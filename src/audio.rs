@@ -1,10 +1,8 @@
 pub mod common;
-pub mod file;
 pub mod host;
 pub mod rechunker;
 pub mod stream;
 pub use common::*;
-pub use file::*;
 pub use host::*;
 pub use rechunker::*;
 pub use stream::*;

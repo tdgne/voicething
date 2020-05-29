@@ -3,21 +3,9 @@ mod config;
 mod gui;
 
 fn main() {
-    let options = config::CommandLineOptions::parse_pub();
-    let input = if let Some(filename) = options.input_file() {
-        Some(audio::Input::File(filename.clone()))
-    } else {
-        Some(audio::Input::Default)
-    };
-    let config = audio::AudioConfig::from_command_line_options(
-        options,
-        input,
-        Some(audio::Output::Default),
-        1024,
-    );
     let buffer = 2;
-    let (tx_in, rx_in) = audio::stream::event_sync_channel(buffer);
-    let (tx_out, rx_out) = audio::stream::event_channel();
+    let (tx_in, rx_in) = audio::stream::sync_chunk_channel(buffer);
+    let (tx_out, rx_out) = audio::stream::chunk_channel();
     let host = audio::Host::new();
     if let Some(default_output_device_name) = host.default_output_device_name() {
         host.use_output_stream_from_device_name(default_output_device_name);

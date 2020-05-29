@@ -1,12 +1,11 @@
 use crate::audio::common::*;
-use crate::audio::stream::node::{Event, EventReceiver, EventSender};
-use crate::audio::stream::node::{Runnable, SingleOutputNode};
+use crate::audio::stream::node::{ChunkReceiver, ChunkSender};
 use crate::audio::rechunker::{format_chunk_channel, format_chunk_sample_rate};
 use getset::Getters;
 use std::sync::mpsc::channel;
 
 pub struct ReceiverVolumePair<S: Sample> {
-    pub receiver: EventReceiver<S>,
+    pub receiver: ChunkReceiver<S>,
     pub volume: f32,
 }
 
@@ -14,7 +13,7 @@ pub struct ReceiverVolumePair<S: Sample> {
 pub struct Mixer<S: Sample> {
     #[getset(get = "pub")]
     receivers: Vec<Option<ReceiverVolumePair<S>>>,
-    sender: Option<EventSender<S>>,
+    sender: Option<ChunkSender<S>>,
     #[getset(get = "pub", set = "pub")]
     output_format: AudioMetadata,
     #[getset(get = "pub", set = "pub")]
@@ -41,18 +40,7 @@ impl<S: Sample> Mixer<S> {
             let mut duration = None;
             for rvp in self.receivers.iter().flat_map(|rvp| rvp.iter()) {
                 let volume = rvp.volume;
-                let chunk = match rvp.receiver.recv() {
-                    Ok(event) => match event {
-                        Event::Chunk(chunk) => chunk,
-                        Event::Stop => {
-                            if let Some(ref sender) = self.sender {
-                                sender.send(Event::Stop).unwrap();
-                            }
-                            return;
-                        }
-                    },
-                    Err(_) => panic!("An error occurred in Mixer"),
-                };
+                let chunk = rvp.receiver.recv().unwrap();
 
                 let formatted_chunk = format_chunk_sample_rate(
                     format_chunk_channel(chunk, out_channels),
@@ -90,17 +78,17 @@ impl<S: Sample> Mixer<S> {
         .unwrap();
 
         if let Some(ref sender) = self.sender {
-            sender.send(Event::Chunk(chunk)).unwrap();
+            sender.send(chunk).unwrap();
         }
     }
 
-    pub fn output(&mut self) -> EventReceiver<S> {
+    pub fn output(&mut self) -> ChunkReceiver<S> {
         let (sender, receiver) = channel();
         self.sender = Some(sender);
         receiver
     }
 
-    pub fn add_receiver(&mut self, receiver: EventReceiver<S>, volume: f32) {
+    pub fn add_receiver(&mut self, receiver: ChunkReceiver<S>, volume: f32) {
         self.receivers.push(Some(ReceiverVolumePair{receiver, volume}));
     }
 

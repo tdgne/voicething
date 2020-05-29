@@ -1,8 +1,3 @@
-use glium::{
-    backend::Facade,
-    texture::{ClientFormat, RawImage2d},
-    Texture2d,
-};
 use imgui::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -10,55 +5,29 @@ use std::thread;
 mod support;
 use crate::audio;
 use crate::audio::rechunker::Rechunker;
-use crate::audio::common::AudioMetadata;
-use crate::audio::stream::{
-    Event, EventReceiver, EventSender, Mixer, MultipleOutputNode, Multiplexer,
-    ProcessNode, PsolaNode, ReceiverVolumePair, Runnable, event_channel
-};
+use crate::audio::stream::*;
 
-pub fn main_loop(host: audio::Host, input: EventReceiver<f32>, output: EventSender<f32>) {
+pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: ChunkSender<f32>) {
     let system = support::init("voicething");
-    
 
     let rechunker = Arc::new(Mutex::new(Rechunker::new(2, 44100)));
-    let (rechunk_tx, rechunk_rx) = event_channel();
+    let (rechunk_main_tx, rechunk_main_rx) = chunk_channel();
+    let (rechunk_monitor_tx, rechunk_monitor_rx) = chunk_channel();
     thread::spawn(move || loop {
-        if let Event::Chunk(chunk) = input.recv().unwrap() {
-            rechunker.lock().unwrap().feed_chunk(chunk);
-        }
+        rechunker.lock().unwrap().feed_chunk(input.recv().unwrap());
         while let Some(chunk) = rechunker.lock().unwrap().pull_chunk(1024) {
-            rechunk_tx.send(Event::Chunk(chunk)).unwrap();
+            rechunk_main_tx.send(chunk.clone()).unwrap();
+            rechunk_monitor_tx.send(chunk).unwrap();
         }
     });
 
-    let input_mtx = Arc::new(Mutex::new(Multiplexer::new(rechunk_rx)));
-    let psola = Arc::new(Mutex::new(PsolaNode::new(
-        input_mtx.lock().unwrap().new_output(),
-        1.0,
-    )));
-    let psola_out = psola.lock().unwrap().output();
-
-    let mut output_mtx = Multiplexer::new(psola_out);
-
-    {
-        let output_mtx_out = output_mtx.new_output();
-        thread::spawn(move || loop {
-            output.send(output_mtx_out.recv().unwrap()).unwrap();
-        });
-    }
-
-    let input_mtx_out = input_mtx.lock().unwrap().new_output();
-    let output_mtx_out = output_mtx.new_output();
-
+    let (psola_monitor_tx, psola_monitor_rx) = chunk_channel();
+    let mut psola = PsolaNode::new(1.0);
+    psola.set_input(rechunk_main_rx);
+    psola.add_output(output);
+    psola.add_output(psola_monitor_tx);
+    let psola = Arc::new(Mutex::new(psola));
     
-    {
-        let input_mtx = input_mtx.clone();
-        thread::spawn(move || loop {
-            input_mtx.lock().unwrap().run_once();
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        });
-    }
-
     {
         let psola = psola.clone();
         thread::spawn(move || loop {
@@ -67,11 +36,9 @@ pub fn main_loop(host: audio::Host, input: EventReceiver<f32>, output: EventSend
         });
     }
 
-    thread::spawn(move || {
-        output_mtx.run();
-    });
-
     {
+        let input_rx = rechunk_monitor_rx;
+        let output_rx = psola_monitor_rx;
         let mut input_amplitudes = vec![];
         let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
@@ -105,12 +72,12 @@ pub fn main_loop(host: audio::Host, input: EventReceiver<f32>, output: EventSend
             });
             Window::new(im_str!("I/O Monitor"))
                 .always_auto_resize(true)
-                .position([0.0, 0.0], Condition::FirstUseEver)
+                .position([0.0, 20.0], Condition::FirstUseEver)
                 .build(&ui, || {
-                    while let Ok(Event::Chunk(chunk)) = input_mtx_out.try_recv() {
+                    while let Ok(chunk) = input_rx.try_recv() {
                         input_amplitudes = chunk.samples(0).to_vec();
                     }
-                    while let Ok(Event::Chunk(chunk)) = output_mtx_out.try_recv() {
+                    while let Ok(chunk) = output_rx.try_recv() {
                         output_amplitudes = chunk.samples(0).to_vec();
                     }
                     ui.plot_lines(im_str!(""), &input_amplitudes)
@@ -128,7 +95,7 @@ pub fn main_loop(host: audio::Host, input: EventReceiver<f32>, output: EventSend
                 });
             Window::new(im_str!("TD-PSOLA"))
                 .always_auto_resize(true)
-                .position([400.0, 0.0], Condition::FirstUseEver)
+                .position([400.0, 20.0], Condition::FirstUseEver)
                 .build(&ui, || {
                     VerticalSlider::new(
                         im_str!("pitch"),

@@ -1,9 +1,9 @@
 use crate::audio::common::*;
-use crate::audio::stream::node::{EventReceiver, EventSender, ProcessNode};
+use crate::audio::stream::node::*;
 use getset::Getters;
 use rustfft::num_complex::Complex32;
 use rustfft::FFTplanner;
-use std::sync::mpsc::channel;
+use uuid::Uuid;
 
 #[derive(Clone)]
 struct PsolaInfo {
@@ -14,19 +14,27 @@ struct PsolaInfo {
 
 #[derive(Getters)]
 pub struct PsolaNode {
-    receiver: EventReceiver<f32>,
-    sender: Option<EventSender<f32>>,
+    input: Option<ChunkReceiver<f32>>,
+    outputs: Vec<ChunkSender<f32>>,
     ratio: f32,
     psola_info: Vec<PsolaInfo>,
+    id: Uuid,
+}
+
+impl HasId for PsolaNode {
+    fn id(&self) -> Uuid {
+        self.id
+    }
 }
 
 impl PsolaNode {
-    pub fn new(receiver: EventReceiver<f32>, ratio: f32) -> Self {
+    pub fn new(ratio: f32) -> Self {
         Self {
-            receiver,
-            sender: None,
+            input: None,
+            outputs: vec![],
             ratio,
             psola_info: vec![],
+            id: Uuid::new_v4(),
         }
     }
 
@@ -36,12 +44,6 @@ impl PsolaNode {
 
     pub fn ratio_mut(&mut self) -> &mut f32 {
         &mut self.ratio
-    }
-
-    pub fn output(&mut self) -> EventReceiver<f32> {
-        let (sender, receiver) = channel();
-        self.sender = Some(sender);
-        receiver
     }
 
     fn period(
@@ -178,13 +180,21 @@ impl PsolaNode {
     }
 }
 
-impl ProcessNode<f32> for PsolaNode {
-    fn receiver(&self) -> &EventReceiver<f32> {
-        &self.receiver
+impl SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>> for PsolaNode {
+    fn input(&self) -> Option<&ChunkReceiver<f32>> {
+        self.input.as_ref()
     }
 
-    fn sender(&self) -> Option<EventSender<f32>> {
-        self.sender.clone()
+    fn outputs(&self) -> &[ChunkSender<f32>] {
+        self.outputs.as_ref()
+    }
+
+    fn set_input(&mut self, rx: ChunkReceiver<f32>) {
+        self.input = Some(rx);
+    }
+
+    fn add_output(&mut self, tx: ChunkSender<f32>) {
+        self.outputs.push(tx);
     }
 
     fn process_chunk(&mut self, chunk: SampleChunk<f32>) -> SampleChunk<f32> {

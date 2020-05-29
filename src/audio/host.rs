@@ -7,7 +7,7 @@ use std::thread;
 use crate::audio::common::{AudioMetadata, SampleChunk};
 use crate::config;
 use crate::audio::rechunker::*;
-use crate::audio::stream::{Event, EventReceiver, EventSyncSender};
+use crate::audio::stream::{ChunkReceiver, SyncChunkSender};
 
 #[derive(Clone)]
 pub struct StreamInfo {
@@ -21,8 +21,8 @@ pub struct Host {
     event_loop: Arc<cpal::EventLoop>,
     input_stream: Arc<Mutex<Option<StreamInfo>>>,
     output_stream: Arc<Mutex<Option<StreamInfo>>>,
-    sender: Arc<Mutex<Option<mpsc::SyncSender<Event<f32>>>>>,
-    receiver: Arc<Mutex<Option<EventReceiver<f32>>>>,
+    sender: Arc<Mutex<Option<SyncChunkSender<f32>>>>,
+    receiver: Arc<Mutex<Option<ChunkReceiver<f32>>>>,
     rechunker: Arc<Mutex<Option<Rechunker>>>,
 }
 
@@ -139,11 +139,11 @@ impl Host {
         *self.output_stream.lock().unwrap() = Some(stream_info);
     }
 
-    pub fn set_sender(&self, sender: Option<EventSyncSender<f32>>) {
+    pub fn set_sender(&self, sender: Option<SyncChunkSender<f32>>) {
         *self.sender.lock().unwrap() = sender;
     }
 
-    pub fn set_receiver(&self, receiver: Option<EventReceiver<f32>>) {
+    pub fn set_receiver(&self, receiver: Option<ChunkReceiver<f32>>) {
         *self.receiver.lock().unwrap() = receiver;
     }
 
@@ -172,7 +172,7 @@ impl Host {
                             Ok(cpal::StreamData::Input { buffer }) => {
                                 if let Some(ref sender) = &*sender.lock().unwrap() {
                                     let chunk = chunk_from_buffer(format.clone(), buffer);
-                                    sender.try_send(Event::Chunk(chunk));
+                                    let _ = sender.try_send(chunk);
                                 }
                             }
                             Err(e) => eprintln!("{}", e),
@@ -190,7 +190,7 @@ impl Host {
                         match &mut stream_data {
                             Ok(cpal::StreamData::Output { ref mut buffer }) => {
                                 if let Some(ref receiver) = &*receiver.lock().unwrap() {
-                                    while let Ok(Event::Chunk(chunk)) = receiver.try_recv() {
+                                    while let Ok(chunk) = receiver.try_recv() {
                                         if let Some(ref mut rechunker) =
                                             &mut *rechunker.lock().unwrap()
                                         {
