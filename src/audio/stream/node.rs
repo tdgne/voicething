@@ -2,6 +2,7 @@ use crate::audio::common::{Sample, SampleChunk, WindowedSampleChunk, Chunk};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
 use rustfft::num_complex::Complex32;
 use uuid::Uuid;
+use std::sync::{Arc, Mutex};
 
 pub type ChunkSender<S> = Sender<SampleChunk<S>>;
 
@@ -45,18 +46,25 @@ pub trait SingleInput<S: Sample, T: Sample, I: Chunk<S>, O: Chunk<T>>: HasId {
     }
 }
 
-pub enum SingleInputNode {
-    Real(Box<dyn SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>>>),
-    Complex(Box<dyn SingleInput<Complex32, Complex32, SampleChunk<Complex32>, SampleChunk<Complex32>>>),
-    WindowedReal(Box<dyn SingleInput<f32, f32, WindowedSampleChunk<f32>, WindowedSampleChunk<f32>>>),
-    WindowedComplex(Box<dyn SingleInput<Complex32, Complex32, SampleChunk<Complex32>, SampleChunk<Complex32>>>),
-    RealComplex(Box<dyn SingleInput<f32, Complex32, SampleChunk<f32>, SampleChunk<Complex32>>>),
-    ComplexReal(Box<dyn SingleInput<Complex32, f32, SampleChunk<Complex32>, SampleChunk<f32>>>),
-    WindowedRealComplex(Box<dyn SingleInput<f32, Complex32, WindowedSampleChunk<f32>, WindowedSampleChunk<Complex32>>>),
-    WindowedComplexReal(Box<dyn SingleInput<Complex32, f32, SampleChunk<Complex32>, SampleChunk<f32>>>),
-}
+type NodeWrapper<N> = Arc<Mutex<N>>;
 
 pub enum Node {
-    SingleInput(SingleInputNode),
+    Psola(NodeWrapper<super::psola::PsolaNode>),
 }
 
+pub enum NodeIoType {
+    Real,
+    Complex,
+    WindowedReal,
+    WindowedComplex,
+}
+
+impl Node {
+    pub fn io_type(&self) -> NodeIoType {
+        use Node::*;
+        use NodeIoType::*;
+        match self {
+            Psola(_) => Real,
+        }
+    }
+}

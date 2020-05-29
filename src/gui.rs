@@ -3,6 +3,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 mod support;
+mod renderable;
+use renderable::Renderable;
 use crate::audio;
 use crate::audio::rechunker::Rechunker;
 use crate::audio::stream::*;
@@ -21,17 +23,34 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: ChunkSend
         }
     });
 
+    let nodes: Arc<Mutex<Vec<Node>>> = Arc::new(Mutex::new(vec![]));
+
+    let (psola_1_tx, psola_1_rx) = chunk_channel();
+
+    let mut psola = PsolaNode::new(1.2);
+    psola.set_input(rechunk_main_rx);
+    psola.add_output(psola_1_tx);
+    let psola = Arc::new(Mutex::new(psola));
+    nodes.lock().unwrap().push(Node::Psola(psola.clone()));
+
     let (psola_monitor_tx, psola_monitor_rx) = chunk_channel();
     let mut psola = PsolaNode::new(1.0);
-    psola.set_input(rechunk_main_rx);
+    psola.set_input(psola_1_rx);
     psola.add_output(output);
     psola.add_output(psola_monitor_tx);
     let psola = Arc::new(Mutex::new(psola));
+    nodes.lock().unwrap().push(Node::Psola(psola.clone()));
     
     {
-        let psola = psola.clone();
+        let nodes = nodes.clone();
         thread::spawn(move || loop {
-            psola.lock().unwrap().run_once();
+            for node in nodes.lock().unwrap().iter() {
+                match node {
+                    Node::Psola(node) => {
+                        node.lock().unwrap().run_once();
+                    }
+                }
+            }
             std::thread::sleep(std::time::Duration::from_millis(1));
         });
     }
@@ -93,18 +112,13 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: ChunkSend
                         .graph_size([300.0, 100.0])
                         .build();
                 });
-            Window::new(im_str!("TD-PSOLA"))
-                .always_auto_resize(true)
-                .position([400.0, 20.0], Condition::FirstUseEver)
-                .build(&ui, || {
-                    VerticalSlider::new(
-                        im_str!("pitch"),
-                        [30.0, 250.0],
-                        std::ops::RangeInclusive::new(0.5, 2.0),
-                    )
-                    .display_format(im_str!("%0.2f"))
-                    .build(&ui, psola.lock().unwrap().ratio_mut());
-                });
+            for node in nodes.lock().unwrap().iter() {
+                match node {
+                    Node::Psola(node) => {
+                        node.lock().unwrap().render(&ui, [400.0, 20.0]);
+                    }
+                }
+            }
         });
     }
 }

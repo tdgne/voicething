@@ -1,5 +1,5 @@
-use crate::audio::common::*;
-use crate::audio::stream::node::*;
+use super::super::common::*;
+use super::node::*;
 use getset::Getters;
 use rustfft::num_complex::Complex32;
 use rustfft::FFTplanner;
@@ -151,23 +151,11 @@ impl PsolaNode {
                 {
                     in_center += in_period;
                 }
-                Self::unitary_ola(
-                    data,
-                    &mut result,
-                    in_center,
-                    in_period as usize,
-                    out_center,
-                );
+                Self::unitary_ola(data, &mut result, in_center, in_period as usize, out_center);
                 out_center += out_period;
             }
 
-            Self::unitary_ola(
-                data,
-                &mut result,
-                in_center,
-                in_period as usize,
-                out_center,
-            );
+            Self::unitary_ola(data, &mut result, in_center, in_period as usize, out_center);
             let info = PsolaInfo {
                 last_in_center: in_center,
                 last_out_center: out_center - out_period,
@@ -216,4 +204,3 @@ impl SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>> for PsolaNode {
         out_chunk
     }
 }
-
