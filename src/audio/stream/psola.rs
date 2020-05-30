@@ -4,19 +4,23 @@ use getset::Getters;
 use rustfft::num_complex::Complex32;
 use rustfft::FFTplanner;
 use uuid::Uuid;
+use serde::{Serialize, Deserialize};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct PsolaInfo {
     last_in_center: isize,
     last_out_center: isize,
     in_period: isize,
 }
 
-#[derive(Getters)]
+#[derive(Getters, Serialize, Deserialize, Debug)]
 pub struct PsolaNode {
+    #[serde(skip)]
     input: Option<ChunkReceiver<f32>>,
+    #[serde(skip)]
     outputs: Vec<SyncChunkSender<f32>>,
     ratio: f32,
+    #[serde(skip)]
     psola_info: Vec<PsolaInfo>,
     id: Uuid,
 }
@@ -177,8 +181,8 @@ impl SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>> for PsolaNode {
         self.outputs.as_ref()
     }
 
-    fn set_input(&mut self, rx: ChunkReceiver<f32>) {
-        self.input = Some(rx);
+    fn set_input(&mut self, rx: Option<ChunkReceiver<f32>>) {
+        self.input = rx;
     }
 
     fn add_output(&mut self, tx: SyncChunkSender<f32>) {

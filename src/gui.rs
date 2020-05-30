@@ -1,6 +1,7 @@
 use imgui::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use serde_json;
 
 mod stream;
 mod support;
@@ -21,57 +22,47 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
         }
     });
 
-    let nodes: Arc<Mutex<Vec<Node>>> = Arc::new(Mutex::new(vec![]));
-    let mut node_editor_state = stream::NodeEditorState::new(nodes.clone());
+    let mut g = Graph::new();
+    let mut node_editor_state = NodeEditorState::new();
 
-    let (input_id_tx, input_id_rx) = sync_chunk_channel(1);
-    let (input_monitor_tx, input_monitor_rx) = sync_chunk_channel(1);
-    let mut input_id = IdentityNode::new("Input".to_string());
-    input_id.set_input(rechunk_rx);
-    input_id.add_output(input_id_tx);
-    input_id.add_output(input_monitor_tx);
-    node_editor_state.set_pos(input_id.id(), [20.0, 20.0]);
-    let input_id = Arc::new(Mutex::new(input_id));
-    nodes.lock().unwrap().push(Node::Input(input_id));
+    let (input_monitor_tx, input_monitor_rx) = sync_chunk_channel(16);
+    let mut input_node = IdentityNode::new("Input".to_string());
+    let input_node_id = input_node.id();
+    input_node.set_input(Some(rechunk_rx));
+    input_node.add_output(input_monitor_tx);
+    g.add(Node::Input(input_node));
+    node_editor_state.set_pos(input_node_id, [20.0, 20.0]);
 
-    let (psola_tx, psola_rx) = sync_chunk_channel(1);
-    let mut psola = PsolaNode::new(1.0);
-    psola.set_input(input_id_rx);
-    psola.add_output(psola_tx);
-    node_editor_state.set_pos(psola.id(), [20.0, 60.0]);
-    let psola = Arc::new(Mutex::new(psola));
-    nodes.lock().unwrap().push(Node::Psola(psola.clone()));
+    let psola_node = PsolaNode::new(1.0);
+    let psola_node_id = psola_node.id();
+    g.add(Node::Psola(psola_node));
+    node_editor_state.set_pos(psola_node_id, [20.0, 60.0]);
 
-    let (output_monitor_tx, output_monitor_rx) = sync_chunk_channel(1);
-    let mut output_id = IdentityNode::new("Output".to_string());
-    output_id.set_input(psola_rx);
-    output_id.add_output(output_monitor_tx);
-    output_id.add_output(output);
-    node_editor_state.set_pos(output_id.id(), [20.0, 100.0]);
-    let output_id = Arc::new(Mutex::new(output_id));
-    nodes.lock().unwrap().push(Node::Output(output_id.clone()));
+    let (output_monitor_tx, output_monitor_rx) = sync_chunk_channel(16);
+    let mut output_node = IdentityNode::new("Output".to_string());
+    let output_node_id = output_node.id();
+    output_node.add_output(output_monitor_tx);
+    output_node.add_output(output);
+    g.add(Node::Output(output_node));
+    node_editor_state.set_pos(output_node_id, [20.0, 100.0]);
+
+    g.connect(&input_node_id, &psola_node_id).unwrap();
+    g.connect(&psola_node_id, &output_node_id).unwrap();
+
+    let g = Arc::new(Mutex::new(g));
 
     {
-        let nodes = nodes.clone();
+        let g = g.clone();
         thread::spawn(move || loop {
-            for node in nodes.lock().unwrap().iter() {
-                match node {
-                    Node::Psola(node) => {
-                        node.lock().unwrap().run_once();
-                    }
-                    Node::Input(node) => {
-                        node.lock().unwrap().run_once();
-                    }
-                    Node::Output(node) => {
-                        node.lock().unwrap().run_once();
-                    }
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_millis(1));
+            g.lock().unwrap().run_once().unwrap();
+            thread::sleep(std::time::Duration::from_millis(1));
         });
     }
 
+    println!("{}", serde_json::to_string(&*g.lock().unwrap()).unwrap());
+
     {
+        let g = g.clone();
         let input_rx = input_monitor_rx;
         let output_rx = output_monitor_rx;
         let mut input_amplitudes = vec![];
@@ -137,35 +128,31 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                 .size([600.0, 600.0], Condition::FirstUseEver)
                 .build(&ui, || {
                     let mut connection_request = None;
-                    for node in nodes.lock().unwrap().iter() {
-                        match node {
-                            Node::Psola(node) => {
-                                connection_request = connection_request.or(node
-                                    .lock()
-                                    .unwrap()
-                                    .render_node(&ui, &mut node_editor_state));
-                            },
-                            Node::Input(node) => {
-                                connection_request = connection_request.or(node
-                                    .lock()
-                                    .unwrap()
-                                    .render_node(&ui, &mut node_editor_state));
-                            },
-                            Node::Output(node) => {
-                                connection_request = connection_request.or(node
-                                    .lock()
-                                    .unwrap()
-                                    .render_node(&ui, &mut node_editor_state));
-                            },
+                    {
+                        for (_, node) in g.lock().unwrap().nodes().iter() {
+                            match &mut *node.lock().unwrap() {
+                                Node::Psola(node) => {
+                                    connection_request = connection_request
+                                        .or(node.render_node(&ui, &mut node_editor_state));
+                                }
+                                Node::Input(node) => {
+                                    connection_request = connection_request
+                                        .or(node.render_node(&ui, &mut node_editor_state));
+                                }
+                                Node::Output(node) => {
+                                    connection_request = connection_request
+                                        .or(node.render_node(&ui, &mut node_editor_state));
+                                }
+                            }
                         }
                     }
                     if let Some(request) = connection_request {
-                        node_editor_state.try_connect(request);
+                        let _ = g.lock().unwrap().connect(&request.0, &request.1);
                     }
                     let draw_list = ui.get_window_draw_list();
                     ui.set_cursor_pos([0.0, 0.0]);
                     let win_pos = ui.cursor_screen_pos();
-                    for (start, ends) in node_editor_state.graph().iter() {
+                    for (start, ends) in g.lock().unwrap().edges().iter() {
                         let start_pos = node_editor_state.pos(start).unwrap();
                         let start_pos = [start_pos[0] + win_pos[0], start_pos[1] + win_pos[1]];
                         for end in ends {

@@ -1,7 +1,7 @@
 use crate::audio::common::{Sample, SampleChunk, WindowedSampleChunk, Chunk};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
 use uuid::Uuid;
-use std::sync::{Arc, Mutex};
+use serde::{Serialize, Deserialize};
 
 pub type ChunkSender<S> = Sender<SampleChunk<S>>;
 
@@ -27,7 +27,7 @@ pub trait SingleInput<S: Sample, T: Sample, I: Chunk<S>, O: Chunk<T>>: HasId {
 
     fn outputs(&self) -> &[SyncSender<O>];
 
-    fn set_input(&mut self, rx: Receiver<I>);
+    fn set_input(&mut self, rx: Option<Receiver<I>>);
 
     fn add_output(&mut self, tx: SyncSender<O>);
 
@@ -45,22 +45,30 @@ pub trait SingleInput<S: Sample, T: Sample, I: Chunk<S>, O: Chunk<T>>: HasId {
     }
 }
 
-type NodeWrapper<N> = Arc<Mutex<N>>;
-
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Node {
-    Psola(NodeWrapper<super::psola::PsolaNode>),
-    Input(NodeWrapper<super::identity::IdentityNode<f32>>),
-    Output(NodeWrapper<super::identity::IdentityNode<f32>>),
+    Psola(super::psola::PsolaNode),
+    Input(super::identity::IdentityNode<f32>),
+    Output(super::identity::IdentityNode<f32>),
 }
 
 impl Node {
     pub fn id(&self) -> Uuid {
         use Node::*;
         match self {
-            Psola(n) => n.lock().unwrap().id(),
-            Input(n) => n.lock().unwrap().id(),
-            Output(n) => n.lock().unwrap().id(),
+            Psola(n) => n.id(),
+            Input(n) => n.id(),
+            Output(n) => n.id(),
         }
     }
+
+    pub fn run_once(&mut self) {
+    use Node::*;
+        match self {
+            Psola(n) => n.run_once(),
+            Input(n) => n.run_once(),
+            Output(n) => n.run_once(),
+        }
+    }
+
 }

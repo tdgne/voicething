@@ -8,8 +8,6 @@ use imgui::*;
 pub type ConnectRequest = (Uuid, Uuid);
 
 pub struct NodeEditorState {
-    nodes: Arc<Mutex<Vec<Node>>>,
-    graph: HashMap<Uuid, Vec<Uuid>>,
     node_pos: HashMap<Uuid, [f32; 2]>,
     left_dragged: Option<Uuid>,
     right_dragged: Option<Uuid>,
@@ -17,36 +15,13 @@ pub struct NodeEditorState {
 }
 
 impl NodeEditorState {
-    pub fn new(nodes: Arc<Mutex<Vec<Node>>>) -> Self {
+    pub fn new() -> Self {
         Self {
-            nodes,
-            graph: HashMap::new(),
             node_pos: HashMap::new(),
             left_dragged: None,
             right_dragged: None,
             focused: None,
         }
-    }
-
-    pub fn nodes(&self) -> Arc<Mutex<Vec<Node>>> {
-        self.nodes.clone()
-    }
-
-    pub fn node(&self, uuid: Uuid) -> Option<Node> {
-        for node in self.nodes.lock().unwrap().iter() {
-            if node.id() == uuid {
-                return Some(node.clone());
-            }
-        }
-        None
-    }
-
-    pub fn graph(&self) ->  &HashMap<Uuid, Vec<Uuid>> {
-        &self.graph
-    }
-
-    pub fn graph_mut(&mut self) ->  &mut HashMap<Uuid, Vec<Uuid>> {
-        &mut self.graph
     }
 
     pub fn set_pos(&mut self, uuid: Uuid, pos: [f32; 2]) {
@@ -83,57 +58,6 @@ impl NodeEditorState {
 
     pub fn focused(&self) -> Option<Uuid> {
         self.focused
-    }
-
-    pub fn add_edge(&mut self, start: &Node, end: &Node) {
-        for (_, v) in self.graph_mut().iter_mut() {
-            *v = v.iter().filter(|n| **n != end.id()).cloned().collect::<Vec<_>>();
-        }
-        if let Some(v) = self.graph_mut().get_mut(&start.id()) {
-            v.push(end.id());
-        } else {
-            self.graph_mut().insert(start.id(), vec![end.id()]);
-        }
-    }
-
-    pub fn try_connect(&mut self, request: ConnectRequest) {
-        use Node::*;
-        let start = self.node(request.0).unwrap();
-        let end = self.node(request.1).unwrap();
-        match &start {
-            Input(s) => 
-                match &end {
-                Input(_) => return,
-                Output(e) => {
-                    let (tx, rx) = sync_chunk_channel(1);
-                    s.lock().unwrap().add_output(tx);
-                    e.lock().unwrap().set_input(rx);
-                    self.add_edge(&start, &end);
-                },
-                Psola(e) => {
-                    let (tx, rx) = sync_chunk_channel(1);
-                    s.lock().unwrap().add_output(tx);
-                    e.lock().unwrap().set_input(rx);
-                    self.add_edge(&start, &end);
-                },
-            },
-            Psola(s) => match &end {
-                Input(_) => return,
-                Output(e) => {
-                    let (tx, rx) = sync_chunk_channel(1);
-                    s.lock().unwrap().add_output(tx);
-                    e.lock().unwrap().set_input(rx);
-                    self.add_edge(&start, &end);
-                },
-                Psola(e) => {
-                    let (tx, rx) = sync_chunk_channel(1);
-                    s.lock().unwrap().add_output(tx);
-                    e.lock().unwrap().set_input(rx);
-                    self.add_edge(&start, &end);
-                },
-            },
-            Output(_) => return,
-        }
     }
 }
 

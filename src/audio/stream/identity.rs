@@ -2,11 +2,15 @@ use super::super::common::*;
 use super::node::*;
 use getset::Getters;
 use uuid::Uuid;
+use serde::{Serialize, Deserialize};
 
-#[derive(Getters)]
+#[derive(Getters, Serialize, Deserialize, Debug)]
 pub struct IdentityNode<S: Sample> {
+    #[serde(skip)]
     input: Option<ChunkReceiver<S>>,
+    #[serde(skip)]
     outputs: Vec<SyncChunkSender<S>>,
+    #[serde(skip)]
     #[getset(get = "pub")]
     name: String,
     id: Uuid,
@@ -38,8 +42,8 @@ impl<S: Sample> SingleInput<S, S, SampleChunk<S>, SampleChunk<S>> for IdentityNo
         self.outputs.as_ref()
     }
 
-    fn set_input(&mut self, rx: ChunkReceiver<S>) {
-        self.input = Some(rx);
+    fn set_input(&mut self, rx: Option<ChunkReceiver<S>>) {
+        self.input = rx;
     }
 
     fn add_output(&mut self, tx: SyncChunkSender<S>) {
