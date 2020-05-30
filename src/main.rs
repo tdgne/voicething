@@ -5,7 +5,7 @@ mod gui;
 fn main() {
     let buffer = 2;
     let (tx_in, rx_in) = audio::stream::sync_chunk_channel(buffer);
-    let (tx_out, rx_out) = audio::stream::chunk_channel();
+    let (tx_out, rx_out) = audio::stream::sync_chunk_channel(1);
     let host = audio::Host::new();
     if let Some(default_output_device_name) = host.default_output_device_name() {
         host.use_output_stream_from_device_name(default_output_device_name);

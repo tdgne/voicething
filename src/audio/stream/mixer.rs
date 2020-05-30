@@ -1,8 +1,8 @@
 use crate::audio::common::*;
-use crate::audio::stream::node::{ChunkReceiver, ChunkSender};
+use crate::audio::stream::node::{ChunkReceiver, SyncChunkSender};
 use crate::audio::rechunker::{format_chunk_channel, format_chunk_sample_rate};
 use getset::Getters;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::sync_channel;
 
 pub struct ReceiverVolumePair<S: Sample> {
     pub receiver: ChunkReceiver<S>,
@@ -13,7 +13,7 @@ pub struct ReceiverVolumePair<S: Sample> {
 pub struct Mixer<S: Sample> {
     #[getset(get = "pub")]
     receivers: Vec<Option<ReceiverVolumePair<S>>>,
-    sender: Option<ChunkSender<S>>,
+    sender: Option<SyncChunkSender<S>>,
     #[getset(get = "pub", set = "pub")]
     output_format: AudioMetadata,
     #[getset(get = "pub", set = "pub")]
@@ -83,7 +83,7 @@ impl<S: Sample> Mixer<S> {
     }
 
     pub fn output(&mut self) -> ChunkReceiver<S> {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = sync_channel(2);
         self.sender = Some(sender);
         receiver
     }

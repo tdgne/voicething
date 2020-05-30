@@ -2,51 +2,67 @@ use imgui::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+mod stream;
 mod support;
-mod renderable;
-use renderable::Renderable;
 use crate::audio;
 use crate::audio::rechunker::Rechunker;
 use crate::audio::stream::*;
+use stream::*;
 
-pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: ChunkSender<f32>) {
+pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunkSender<f32>) {
     let system = support::init("voicething");
 
     let rechunker = Arc::new(Mutex::new(Rechunker::new(2, 44100)));
-    let (rechunk_main_tx, rechunk_main_rx) = chunk_channel();
-    let (rechunk_monitor_tx, rechunk_monitor_rx) = chunk_channel();
+    let (rechunk_tx, rechunk_rx) = chunk_channel();
     thread::spawn(move || loop {
         rechunker.lock().unwrap().feed_chunk(input.recv().unwrap());
         while let Some(chunk) = rechunker.lock().unwrap().pull_chunk(1024) {
-            rechunk_main_tx.send(chunk.clone()).unwrap();
-            rechunk_monitor_tx.send(chunk).unwrap();
+            rechunk_tx.send(chunk.clone()).unwrap();
         }
     });
 
     let nodes: Arc<Mutex<Vec<Node>>> = Arc::new(Mutex::new(vec![]));
+    let mut node_editor_state = stream::NodeEditorState::new(nodes.clone());
 
-    let (psola_1_tx, psola_1_rx) = chunk_channel();
+    let (input_id_tx, input_id_rx) = sync_chunk_channel(1);
+    let (input_monitor_tx, input_monitor_rx) = sync_chunk_channel(1);
+    let mut input_id = IdentityNode::new("Input".to_string());
+    input_id.set_input(rechunk_rx);
+    input_id.add_output(input_id_tx);
+    input_id.add_output(input_monitor_tx);
+    node_editor_state.set_pos(input_id.id(), [20.0, 20.0]);
+    let input_id = Arc::new(Mutex::new(input_id));
+    nodes.lock().unwrap().push(Node::Input(input_id));
 
-    let mut psola = PsolaNode::new(1.2);
-    psola.set_input(rechunk_main_rx);
-    psola.add_output(psola_1_tx);
-    let psola = Arc::new(Mutex::new(psola));
-    nodes.lock().unwrap().push(Node::Psola(psola.clone()));
-
-    let (psola_monitor_tx, psola_monitor_rx) = chunk_channel();
+    let (psola_tx, psola_rx) = sync_chunk_channel(1);
     let mut psola = PsolaNode::new(1.0);
-    psola.set_input(psola_1_rx);
-    psola.add_output(output);
-    psola.add_output(psola_monitor_tx);
+    psola.set_input(input_id_rx);
+    psola.add_output(psola_tx);
+    node_editor_state.set_pos(psola.id(), [20.0, 60.0]);
     let psola = Arc::new(Mutex::new(psola));
     nodes.lock().unwrap().push(Node::Psola(psola.clone()));
-    
+
+    let (output_monitor_tx, output_monitor_rx) = sync_chunk_channel(1);
+    let mut output_id = IdentityNode::new("Output".to_string());
+    output_id.set_input(psola_rx);
+    output_id.add_output(output_monitor_tx);
+    output_id.add_output(output);
+    node_editor_state.set_pos(output_id.id(), [20.0, 100.0]);
+    let output_id = Arc::new(Mutex::new(output_id));
+    nodes.lock().unwrap().push(Node::Output(output_id.clone()));
+
     {
         let nodes = nodes.clone();
         thread::spawn(move || loop {
             for node in nodes.lock().unwrap().iter() {
                 match node {
                     Node::Psola(node) => {
+                        node.lock().unwrap().run_once();
+                    }
+                    Node::Input(node) => {
+                        node.lock().unwrap().run_once();
+                    }
+                    Node::Output(node) => {
                         node.lock().unwrap().run_once();
                     }
                 }
@@ -56,8 +72,8 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: ChunkSend
     }
 
     {
-        let input_rx = rechunk_monitor_rx;
-        let output_rx = psola_monitor_rx;
+        let input_rx = input_monitor_rx;
+        let output_rx = output_monitor_rx;
         let mut input_amplitudes = vec![];
         let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
@@ -67,10 +83,12 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: ChunkSend
                 ui.menu(im_str!("Devices"), true, || {
                     ui.menu(im_str!("Input"), true, || {
                         for name in host.input_device_names().iter() {
-                            let mut selected = current_input_device_name.clone().map(|n| n == *name).unwrap_or(false);
+                            let mut selected = current_input_device_name
+                                .clone()
+                                .map(|n| n == *name)
+                                .unwrap_or(false);
                             let was_selected = selected;
-                            MenuItem::new(&im_str!("{}", name))
-                                .build_with_ref(&ui, &mut selected);
+                            MenuItem::new(&im_str!("{}", name)).build_with_ref(&ui, &mut selected);
                             if !was_selected && selected {
                                 host.use_input_stream_from_device_name(name.clone());
                             }
@@ -78,10 +96,12 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: ChunkSend
                     });
                     ui.menu(im_str!("Output"), true, || {
                         for name in host.output_device_names().iter() {
-                            let mut selected = current_output_device_name.clone().map(|n| n == *name).unwrap_or(false);
+                            let mut selected = current_output_device_name
+                                .clone()
+                                .map(|n| n == *name)
+                                .unwrap_or(false);
                             let was_selected = selected;
-                            MenuItem::new(&im_str!("{}", name))
-                                .build_with_ref(&ui, &mut selected);
+                            MenuItem::new(&im_str!("{}", name)).build_with_ref(&ui, &mut selected);
                             if !was_selected && selected {
                                 host.use_output_stream_from_device_name(name.clone());
                             }
@@ -112,13 +132,52 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: ChunkSend
                         .graph_size([300.0, 100.0])
                         .build();
                 });
-            for node in nodes.lock().unwrap().iter() {
-                match node {
-                    Node::Psola(node) => {
-                        node.lock().unwrap().render(&ui, [400.0, 20.0]);
+            Window::new(im_str!("Nodes"))
+                .position([400.0, 20.0], Condition::FirstUseEver)
+                .size([600.0, 600.0], Condition::FirstUseEver)
+                .build(&ui, || {
+                    let mut connection_request = None;
+                    for node in nodes.lock().unwrap().iter() {
+                        match node {
+                            Node::Psola(node) => {
+                                connection_request = connection_request.or(node
+                                    .lock()
+                                    .unwrap()
+                                    .render_node(&ui, &mut node_editor_state));
+                            },
+                            Node::Input(node) => {
+                                connection_request = connection_request.or(node
+                                    .lock()
+                                    .unwrap()
+                                    .render_node(&ui, &mut node_editor_state));
+                            },
+                            Node::Output(node) => {
+                                connection_request = connection_request.or(node
+                                    .lock()
+                                    .unwrap()
+                                    .render_node(&ui, &mut node_editor_state));
+                            },
+                        }
                     }
-                }
-            }
+                    if let Some(request) = connection_request {
+                        node_editor_state.try_connect(request);
+                    }
+                    let draw_list = ui.get_window_draw_list();
+                    ui.set_cursor_pos([0.0, 0.0]);
+                    let win_pos = ui.cursor_screen_pos();
+                    for (start, ends) in node_editor_state.graph().iter() {
+                        let start_pos = node_editor_state.pos(start).unwrap();
+                        let start_pos = [start_pos[0] + win_pos[0], start_pos[1] + win_pos[1]];
+                        for end in ends {
+                            let end_pos = node_editor_state.pos(end).unwrap();
+                            let end_pos = [end_pos[0] + win_pos[0], end_pos[1] + win_pos[1]];
+                            draw_list
+                                .add_line(start_pos.clone(), end_pos.clone(), (0.5, 0.5, 0.5, 0.5))
+                                .thickness(2.0)
+                                .build();
+                        }
+                    }
+                });
         });
     }
 }

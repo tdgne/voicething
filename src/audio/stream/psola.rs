@@ -15,7 +15,7 @@ struct PsolaInfo {
 #[derive(Getters)]
 pub struct PsolaNode {
     input: Option<ChunkReceiver<f32>>,
-    outputs: Vec<ChunkSender<f32>>,
+    outputs: Vec<SyncChunkSender<f32>>,
     ratio: f32,
     psola_info: Vec<PsolaInfo>,
     id: Uuid,
@@ -173,7 +173,7 @@ impl SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>> for PsolaNode {
         self.input.as_ref()
     }
 
-    fn outputs(&self) -> &[ChunkSender<f32>] {
+    fn outputs(&self) -> &[SyncChunkSender<f32>] {
         self.outputs.as_ref()
     }
 
@@ -181,7 +181,7 @@ impl SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>> for PsolaNode {
         self.input = Some(rx);
     }
 
-    fn add_output(&mut self, tx: ChunkSender<f32>) {
+    fn add_output(&mut self, tx: SyncChunkSender<f32>) {
         self.outputs.push(tx);
     }
 

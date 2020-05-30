@@ -1,6 +1,5 @@
 use crate::audio::common::{Sample, SampleChunk, WindowedSampleChunk, Chunk};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
-use rustfft::num_complex::Complex32;
 use uuid::Uuid;
 use std::sync::{Arc, Mutex};
 
@@ -26,11 +25,11 @@ pub trait HasId {
 pub trait SingleInput<S: Sample, T: Sample, I: Chunk<S>, O: Chunk<T>>: HasId {
     fn input(&self) -> Option<&Receiver<I>>;
 
-    fn outputs(&self) -> &[Sender<O>];
+    fn outputs(&self) -> &[SyncSender<O>];
 
     fn set_input(&mut self, rx: Receiver<I>);
 
-    fn add_output(&mut self, tx: Sender<O>);
+    fn add_output(&mut self, tx: SyncSender<O>);
 
     fn process_chunk(&mut self, chunk: I) -> O;
 
@@ -39,7 +38,7 @@ pub trait SingleInput<S: Sample, T: Sample, I: Chunk<S>, O: Chunk<T>>: HasId {
             if let Some(chunk) = input.try_recv().ok() {
                 let chunk = self.process_chunk(chunk);
                 for output in self.outputs().iter() {
-                    let _ = output.send(chunk.clone());
+                    let _ = output.try_send(chunk.clone());
                 }
             }
         }
@@ -48,23 +47,20 @@ pub trait SingleInput<S: Sample, T: Sample, I: Chunk<S>, O: Chunk<T>>: HasId {
 
 type NodeWrapper<N> = Arc<Mutex<N>>;
 
+#[derive(Clone)]
 pub enum Node {
     Psola(NodeWrapper<super::psola::PsolaNode>),
-}
-
-pub enum NodeIoType {
-    Real,
-    Complex,
-    WindowedReal,
-    WindowedComplex,
+    Input(NodeWrapper<super::identity::IdentityNode<f32>>),
+    Output(NodeWrapper<super::identity::IdentityNode<f32>>),
 }
 
 impl Node {
-    pub fn io_type(&self) -> NodeIoType {
+    pub fn id(&self) -> Uuid {
         use Node::*;
-        use NodeIoType::*;
         match self {
-            Psola(_) => Real,
+            Psola(n) => n.lock().unwrap().id(),
+            Input(n) => n.lock().unwrap().id(),
+            Output(n) => n.lock().unwrap().id(),
         }
     }
 }
