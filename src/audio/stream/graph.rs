@@ -136,6 +136,9 @@ impl Graph {
                     Psola(_) => {
                         detach_id = Some(*to_id);
                     }
+                    Windower(_) => {
+                        detach_id = Some(*to_id);
+                    }
                 },
                 Psola(_) => match &*to {
                     Input(_) => cerr?,
@@ -145,6 +148,15 @@ impl Graph {
                     Psola(_) => {
                         detach_id = Some(*to_id);
                     }
+                    Windower(_) => {
+                        detach_id = Some(*to_id);
+                    }
+                },
+                Windower(_) => match &*to {
+                    Psola(_) => {
+                        detach_id = Some(*to_id);
+                    }
+                    _ => cerr?,
                 },
                 Output(_) => cerr?,
             }
@@ -165,22 +177,37 @@ impl Graph {
                     Output(ref mut e) => {
                         s.add_output(tx);
                         e.set_input(Some(rx));
-                    }
+                    },
                     Psola(ref mut e) => {
                         s.add_output(tx);
                         e.set_input(Some(rx));
-                    }
+                    },
+                    Windower(ref mut e) => {
+                        s.add_output(tx);
+                        e.set_input(Some(rx));
+                    },
                 },
                 Psola(ref mut s) => match &mut *to {
                     Input(_) => cerr?,
                     Output(ref mut e) => {
                         s.add_output(tx);
                         e.set_input(Some(rx));
-                    }
+                    },
                     Psola(ref mut e) => {
                         s.add_output(tx);
                         e.set_input(Some(rx));
-                    }
+                    },
+                    Windower(ref mut e) => {
+                        s.add_output(tx);
+                        e.set_input(Some(rx));
+                    },
+                },
+                Windower(ref mut s) => match &mut *to {
+                    Psola(ref mut e) => {
+                        s.add_output(tx);
+                        e.set_input(Some(rx));
+                    },
+                    _ => cerr?,
                 },
                 Output(_) => cerr?,
             }
@@ -207,6 +234,10 @@ impl Graph {
                     e.set_input(None);
                     self.disconnect_edge(*from_id, *to_id)?;
                 }
+                Windower(ref mut e) => {
+                    e.set_input(None);
+                    self.disconnect_edge(*from_id, *to_id)?;
+                }
             },
             Psola(_) => match &mut *to {
                 Input(_) => cerr?,
@@ -214,6 +245,17 @@ impl Graph {
                     e.set_input(None);
                     self.disconnect_edge(*from_id, *to_id)?;
                 }
+                Psola(ref mut e) => {
+                    e.set_input(None);
+                    self.disconnect_edge(*from_id, *to_id)?;
+                }
+                Windower(ref mut e) => {
+                    e.set_input(None);
+                    self.disconnect_edge(*from_id, *to_id)?;
+                }
+            },
+            Windower(_) => match &mut *to {
+                _ => cerr?,
                 Psola(ref mut e) => {
                     e.set_input(None);
                     self.disconnect_edge(*from_id, *to_id)?;

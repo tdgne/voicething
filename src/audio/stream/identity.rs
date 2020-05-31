@@ -33,7 +33,7 @@ impl<S: Sample> IdentityNode<S> {
     }
 }
 
-impl<S: Sample> SingleInput<S, S, SampleChunk<S>, SampleChunk<S>> for IdentityNode<S> {
+impl<S: Sample> SingleInput<S, S> for IdentityNode<S> {
     fn input(&self) -> Option<&ChunkReceiver<S>> {
         self.input.as_ref()
     }

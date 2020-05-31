@@ -143,6 +143,10 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                                     connection_request = connection_request
                                         .or(node.render_node(&ui, &mut node_editor_state));
                                 }
+                                Node::Windower(node) => {
+                                    connection_request = connection_request
+                                        .or(node.render_node(&ui, &mut node_editor_state));
+                                }
                             }
                         }
                     }

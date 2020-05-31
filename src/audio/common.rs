@@ -2,6 +2,7 @@ use derive_new::new;
 use getset::Getters;
 use rustfft::num_traits::{FromPrimitive, Num, NumAssignOps, NumCast, NumOps};
 use rustfft::num_complex::Complex32;
+use serde::{Serialize, Deserialize};
 
 #[derive(Getters, Clone, Debug, new)]
 #[getset(get = "pub")]
@@ -40,6 +41,8 @@ pub struct SampleChunk<S: Sample> {
     metadata: AudioMetadata,
     #[getset(get = "pub")]
     duration_samples: usize,
+    #[getset(get = "pub")]
+    window_info: Option<WindowInfo>,
 }
 
 impl<S: Sample> SampleChunk<S> {
@@ -63,6 +66,7 @@ impl<S: Sample> SampleChunk<S> {
             samples,
             metadata,
             duration_samples,
+            window_info: None,
         })
     }
 
@@ -96,23 +100,18 @@ impl<S: Sample> SampleChunk<S> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum WindowFunction {
     Hanning,
+    Triangular,
     Rectangular
 }
 
 #[derive(Getters, Clone, Debug, new)]
-pub struct WindowedSampleChunk<S: Sample> {
-    #[getset(get = "pub")]
-    chunk: SampleChunk<S>,
+pub struct WindowInfo {
     #[getset(get_copy = "pub")]
     window_function: WindowFunction,
     #[getset(get_copy = "pub")]
     delay: usize,
 }
-
-pub trait Chunk<S: Sample>: Clone {}
-impl<S: Sample> Chunk<S> for SampleChunk<S> {}
-impl<S: Sample> Chunk<S> for WindowedSampleChunk<S> {}
 

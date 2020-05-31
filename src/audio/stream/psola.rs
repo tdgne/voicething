@@ -172,7 +172,7 @@ impl PsolaNode {
     }
 }
 
-impl SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>> for PsolaNode {
+impl SingleInput<f32, f32> for PsolaNode {
     fn input(&self) -> Option<&ChunkReceiver<f32>> {
         self.input.as_ref()
     }
@@ -203,7 +203,7 @@ impl SingleInput<f32, f32, SampleChunk<f32>, SampleChunk<f32>> for PsolaNode {
             .map(|(c, info)| self.psola(chunk.samples(c), info))
             .unzip();
         let out_chunk =
-            SampleChunk::new(samples, chunk.metadata().clone(), *chunk.duration_samples());
+            SampleChunk::new(samples, chunk.metadata().clone(), *chunk.duration_samples(), chunk.window_info().clone());
         self.psola_info = info;
         out_chunk
     }

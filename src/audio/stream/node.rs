@@ -1,4 +1,4 @@
-use crate::audio::common::{Sample, SampleChunk, WindowedSampleChunk, Chunk};
+use crate::audio::common::{Sample, SampleChunk};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
@@ -22,16 +22,16 @@ pub trait HasId {
     fn id(&self) -> Uuid;
 }
 
-pub trait SingleInput<S: Sample, T: Sample, I: Chunk<S>, O: Chunk<T>>: HasId {
-    fn input(&self) -> Option<&Receiver<I>>;
+pub trait SingleInput<S: Sample, T: Sample>: HasId {
+    fn input(&self) -> Option<&ChunkReceiver<S>>;
 
-    fn outputs(&self) -> &[SyncSender<O>];
+    fn outputs(&self) -> &[SyncChunkSender<T>];
 
-    fn set_input(&mut self, rx: Option<Receiver<I>>);
+    fn set_input(&mut self, rx: Option<ChunkReceiver<S>>);
 
-    fn add_output(&mut self, tx: SyncSender<O>);
+    fn add_output(&mut self, tx: SyncChunkSender<T>);
 
-    fn process_chunk(&mut self, chunk: I) -> O;
+    fn process_chunk(&mut self, chunk: SampleChunk<S>) -> SampleChunk<T>;
 
     fn run_once(&mut self) {
         if let Some(input) = self.input() {
@@ -50,6 +50,7 @@ pub enum Node {
     Psola(super::psola::PsolaNode),
     Input(super::identity::IdentityNode<f32>),
     Output(super::identity::IdentityNode<f32>),
+    Windower(super::windower::Windower<f32>),
 }
 
 impl Node {
@@ -59,6 +60,7 @@ impl Node {
             Psola(n) => n.id(),
             Input(n) => n.id(),
             Output(n) => n.id(),
+            Windower(n) => n.id(),
         }
     }
 
@@ -68,6 +70,7 @@ impl Node {
             Psola(n) => n.run_once(),
             Input(n) => n.run_once(),
             Output(n) => n.run_once(),
+            Windower(n) => n.run_once(),
         }
     }
 
