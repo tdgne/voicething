@@ -98,7 +98,8 @@ macro_rules! operate_connection {
             match $from, $to, {
                 ( Input => Output, Psola, Windower,),
                 ( Psola => Output, Windower,),
-                ( Windower => Psola,),
+                ( Windower => Psola, Dewindower, ),
+                ( Dewindower => Output, Psola, Windower, ),
             }, do($ident_f, $ident_t) {
                 $do
             }, err{
@@ -112,5 +113,6 @@ define_node!(
     (Psola: PsolaNode),
     (Input: IdentityNode<f32>),
     (Output: IdentityNode<f32>),
-    (Windower: Windower<f32>)
+    (Windower: Windower<f32>),
+    (Dewindower: Dewindower<f32>)
 );

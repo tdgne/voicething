@@ -1,5 +1,5 @@
 use derive_new::new;
-use getset::Getters;
+use getset::{Getters, Setters};
 use rustfft::num_traits::{FromPrimitive, Num, NumAssignOps, NumCast, NumOps};
 use rustfft::num_complex::Complex32;
 use serde::{Serialize, Deserialize};
@@ -34,14 +34,14 @@ pub trait Sample:
 impl Sample for f32 {}
 impl Sample for Complex32 {}
 
-#[derive(Getters, Clone, Debug, new)]
+#[derive(Getters, Setters, Clone, Debug, new)]
 pub struct SampleChunk<S: Sample> {
     samples: Vec<Vec<S>>,
     #[getset(get = "pub")]
     metadata: AudioMetadata,
     #[getset(get = "pub")]
     duration_samples: usize,
-    #[getset(get = "pub")]
+    #[getset(get = "pub", set = "pub")]
     window_info: Option<WindowInfo>,
 }
 
@@ -109,9 +109,9 @@ pub enum WindowFunction {
 
 #[derive(Getters, Clone, Debug, new)]
 pub struct WindowInfo {
-    #[getset(get_copy = "pub")]
+    #[getset(get = "pub")]
     window_function: WindowFunction,
-    #[getset(get_copy = "pub")]
+    #[getset(get = "pub")]
     delay: usize,
 }
 

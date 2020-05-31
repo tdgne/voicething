@@ -7,6 +7,7 @@ mod stream;
 mod support;
 use crate::audio;
 use crate::audio::rechunker::Rechunker;
+use crate::audio::common::*;
 use crate::audio::stream::*;
 use stream::*;
 
@@ -98,6 +99,14 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                             }
                         }
                     });
+                    ui.menu(im_str!("Nodes"), true, || {
+                        if MenuItem::new(im_str!("Windower")).build(&ui) {
+                            g.lock().unwrap().add(Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64)));
+                        }
+                        if MenuItem::new(im_str!("Dewindower")).build(&ui) {
+                            g.lock().unwrap().add(Node::Dewindower(Dewindower::new(1024)));
+                        }
+                    });
                 });
             });
             Window::new(im_str!("I/O Monitor"))
@@ -144,6 +153,10 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                                         .or(node.render_node(&ui, &mut node_editor_state));
                                 }
                                 Node::Windower(node) => {
+                                    connection_request = connection_request
+                                        .or(node.render_node(&ui, &mut node_editor_state));
+                                }
+                                Node::Dewindower(node) => {
                                     connection_request = connection_request
                                         .or(node.render_node(&ui, &mut node_editor_state));
                                 }
