@@ -1,3 +1,5 @@
+#[macro_use]
+use crate::operate_connection;
 use super::node::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -120,46 +122,21 @@ impl Graph {
             return Ok(());
         }
         let mut detach_id = None;
-        use Node::*;
         {
             let from_rc = self.node(from_id)?;
             let from = from_rc.lock().unwrap();
             let to_rc = self.node(to_id)?;
             let to = to_rc.lock().unwrap();
             let cerr = Err(CompatibilityError);
-            match &*from {
-                Input(_) => match &*to {
-                    Input(_) => cerr?,
-                    Output(_) => {
+            operate_connection!(
+                match &*from, &*to, do(f, t){
+                    {
                         detach_id = Some(*to_id);
                     }
-                    Psola(_) => {
-                        detach_id = Some(*to_id);
-                    }
-                    Windower(_) => {
-                        detach_id = Some(*to_id);
-                    }
-                },
-                Psola(_) => match &*to {
-                    Input(_) => cerr?,
-                    Output(_) => {
-                        detach_id = Some(*to_id);
-                    }
-                    Psola(_) => {
-                        detach_id = Some(*to_id);
-                    }
-                    Windower(_) => {
-                        detach_id = Some(*to_id);
-                    }
-                },
-                Windower(_) => match &*to {
-                    Psola(_) => {
-                        detach_id = Some(*to_id);
-                    }
-                    _ => cerr?,
-                },
-                Output(_) => cerr?,
-            }
+                }, err{
+                    cerr?
+                }
+            );
         }
         if let Some(id) = detach_id {
             self.detach(id)?;
@@ -171,46 +148,16 @@ impl Graph {
             let mut to = to_rc.lock().unwrap();
             let cerr = Err(CompatibilityError);
             let (tx, rx) = sync_chunk_channel(16);
-            match &mut *from {
-                Input(ref mut s) => match &mut *to {
-                    Input(_) => cerr?,
-                    Output(ref mut e) => {
-                        s.add_output(tx);
-                        e.set_input(Some(rx));
-                    },
-                    Psola(ref mut e) => {
-                        s.add_output(tx);
-                        e.set_input(Some(rx));
-                    },
-                    Windower(ref mut e) => {
-                        s.add_output(tx);
-                        e.set_input(Some(rx));
-                    },
-                },
-                Psola(ref mut s) => match &mut *to {
-                    Input(_) => cerr?,
-                    Output(ref mut e) => {
-                        s.add_output(tx);
-                        e.set_input(Some(rx));
-                    },
-                    Psola(ref mut e) => {
-                        s.add_output(tx);
-                        e.set_input(Some(rx));
-                    },
-                    Windower(ref mut e) => {
-                        s.add_output(tx);
-                        e.set_input(Some(rx));
-                    },
-                },
-                Windower(ref mut s) => match &mut *to {
-                    Psola(ref mut e) => {
-                        s.add_output(tx);
-                        e.set_input(Some(rx));
-                    },
-                    _ => cerr?,
-                },
-                Output(_) => cerr?,
-            }
+            operate_connection!(
+                match &mut *from, &mut *to, do(f, t){
+                    {
+                        f.add_output(tx);
+                        t.set_input(Some(rx));
+                    }
+                }, err{
+                    cerr?
+                }
+            );
         }
         self.connect_edge(*from_id, *to_id)?;
         Ok(())
@@ -222,47 +169,16 @@ impl Graph {
         let to_rc = self.node(to_id)?;
         let mut to = to_rc.lock().unwrap();
         let cerr = Err(CompatibilityError);
-        use Node::*;
-        match &mut *from {
-            Input(_) => match &mut *to {
-                Input(_) => cerr?,
-                Output(ref mut e) => {
-                    e.set_input(None);
+        operate_connection!(
+            match &mut *from, &mut *to, do(f, t){
+                {
                     self.disconnect_edge(*from_id, *to_id)?;
+                    t.set_input(None);
                 }
-                Psola(ref mut e) => {
-                    e.set_input(None);
-                    self.disconnect_edge(*from_id, *to_id)?;
-                }
-                Windower(ref mut e) => {
-                    e.set_input(None);
-                    self.disconnect_edge(*from_id, *to_id)?;
-                }
-            },
-            Psola(_) => match &mut *to {
-                Input(_) => cerr?,
-                Output(ref mut e) => {
-                    e.set_input(None);
-                    self.disconnect_edge(*from_id, *to_id)?;
-                }
-                Psola(ref mut e) => {
-                    e.set_input(None);
-                    self.disconnect_edge(*from_id, *to_id)?;
-                }
-                Windower(ref mut e) => {
-                    e.set_input(None);
-                    self.disconnect_edge(*from_id, *to_id)?;
-                }
-            },
-            Windower(_) => match &mut *to {
-                _ => cerr?,
-                Psola(ref mut e) => {
-                    e.set_input(None);
-                    self.disconnect_edge(*from_id, *to_id)?;
-                }
-            },
-            Output(_) => cerr?,
-        }
+            }, err{
+                cerr?
+            }
+        );
         Ok(())
     }
 
