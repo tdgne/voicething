@@ -65,17 +65,18 @@ impl<S: Sample> Dewindower<S> {
         let delay = *chunk.window_info().clone().unwrap().delay();
         for c in 0..*chunk.metadata().channels() {
             if self.buffer.len() <= c {
-                self.buffer.push(chunk.samples(c).to_vec().into());
-            } else {
-                for (i, b) in self.buffer[c].iter_mut().enumerate() {
-                    if i >= delay {
-                        *b += chunk.samples(c)[i - delay];
-                    }
-                }
+                self.buffer.push(vec![S::from_f32(0.0).unwrap(); chunk.duration_samples() - delay].into());
+            }
+            for _ in 0..delay {
+                self.buffer[c].push_back(S::from_f32(0.0).unwrap());
+            }
+            let l = self.buffer[c].len();
+            for (i, b) in chunk.samples(c).iter().enumerate() {
+                self.buffer[c][l - chunk.duration_samples() + i] += *b;
             }
         }
         let mut dewindowed_chunks = vec![];
-        while self.buffer[0].len() >= self.out_chunk_size {
+        while self.buffer[0].len() >= self.out_chunk_size + chunk.duration_samples() {
             let mut dewindowed_chunk: SampleChunk<S> = SampleChunk::from_flat_samples(
                 &vec![S::from_f32(0.0).unwrap(); self.buffer.len() * self.out_chunk_size],
                 chunk.metadata().clone(),
@@ -84,11 +85,11 @@ impl<S: Sample> Dewindower<S> {
             for (c, b) in self.buffer.iter().enumerate() {
                 let samples = dewindowed_chunk.samples_mut(c);
                 for (i, s) in b.iter().take(self.out_chunk_size).enumerate() {
-                    samples[i] = *s;
+                    samples[i] = *s * S::from_f32(delay as f32 / self.out_chunk_size as f32).unwrap();
                 }
             }
             for b in self.buffer.iter_mut() {
-                for _ in 0..delay {
+                for _ in 0..self.out_chunk_size {
                     b.pop_front();
                 }
             }

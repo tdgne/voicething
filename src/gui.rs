@@ -99,14 +99,18 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                             }
                         }
                     });
-                    ui.menu(im_str!("Nodes"), true, || {
-                        if MenuItem::new(im_str!("Windower")).build(&ui) {
-                            g.lock().unwrap().add(Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64)));
-                        }
-                        if MenuItem::new(im_str!("Dewindower")).build(&ui) {
-                            g.lock().unwrap().add(Node::Dewindower(Dewindower::new(1024)));
-                        }
-                    });
+                });
+                ui.menu(im_str!("Nodes"), true, || {
+                    if MenuItem::new(im_str!("Windower")).build(&ui) {
+                        let node = Node::Windower(Windower::new(WindowFunction::Hanning, 1024, 256));
+                        node_editor_state.set_pos(node.id(), [20.0, 20.0]);
+                        g.lock().unwrap().add(node);
+                    }
+                    if MenuItem::new(im_str!("Dewindower")).build(&ui) {
+                        let node = Node::Dewindower(Dewindower::new(1024));
+                        node_editor_state.set_pos(node.id(), [20.0, 20.0]);
+                        g.lock().unwrap().add(node);
+                    }
                 });
             });
             Window::new(im_str!("I/O Monitor"))

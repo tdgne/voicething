@@ -97,7 +97,7 @@ macro_rules! operate_connection {
         operate_connection!(
             match $from, $to, {
                 ( Input => Output, Psola, Windower,),
-                ( Psola => Output, Windower,),
+                ( Psola => Output, Windower, Dewindower, ),
                 ( Windower => Psola, Dewindower, ),
                 ( Dewindower => Output, Psola, Windower, ),
             }, do($ident_f, $ident_t) {

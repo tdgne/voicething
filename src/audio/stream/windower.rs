@@ -16,7 +16,9 @@ pub struct Windower<S: Sample> {
     #[serde(skip)]
     buffer: Vec<VecDeque<S>>,
     window_function: WindowFunction,
+    #[getset(get = "pub")]
     window_size: usize,
+    #[getset(get = "pub")]
     delay: usize,
 }
 
@@ -37,6 +39,18 @@ impl<S: Sample> Windower<S> {
             delay,
             buffer: vec![],
         }
+    }
+
+    pub fn window_function_mut(&mut self) -> &mut WindowFunction {
+        &mut self.window_function
+    }
+
+    pub fn window_size_mut(&mut self) -> &mut usize {
+        &mut self.window_size
+    }
+
+    pub fn delay_mut(&mut self) -> &mut usize {
+        &mut self.delay
     }
 
     pub fn input(&self) -> Option<&ChunkReceiver<S>> {
@@ -121,15 +135,44 @@ mod test {
     use crate::audio::*;
     #[test]
     fn window_dewindow() {
-        let c = SampleChunk::from_flat_samples(&vec![1.0; 1024*4], AudioMetadata::new(2, 44100)).unwrap();
-        let mut w = Windower::new(WindowFunction::Hanning, 300, 128);
-        let mut dw = Dewindower::new(821);
-        for n in w.process_chunk(c).into_iter() {
-            assert_eq!(*n.duration_samples(), 300);
-            assert_ne!(n.samples(0)[1], 0.0);
-            for n in dw.process_chunk(n).iter() {
-                assert_eq!(*n.duration_samples(), 821);
+        let c = SampleChunk::from_flat_samples(&vec![1.0; 1024*2], AudioMetadata::new(2, 44100)).unwrap();
+        let mut w = Windower::new(WindowFunction::Hanning, 1024, 128);
+        let mut dw = Dewindower::new(1024);
+        let mut first = true;
+        for _ in 0..4 {
+            for n in w.process_chunk(c.clone()).into_iter() {
+                assert_eq!(*n.duration_samples(), 1024);
                 assert_ne!(n.samples(0)[1], 0.0);
+                for n in dw.process_chunk(n).iter() {
+                    assert_eq!(*n.duration_samples(), 1024);
+                    if !first {
+                        for s in n.samples(0) {
+                            assert_ne!(*s, 0.0);
+                        }
+                    } else {
+                        assert_eq!(n.samples(0)[0], 0.0);
+                    }
+                    first = false;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn window_dewindow_changing_params() {
+        let c = SampleChunk::from_flat_samples(&vec![1.0; 1024*2], AudioMetadata::new(2, 44100)).unwrap();
+        let mut w = Windower::new(WindowFunction::Hanning, 1024, 128);
+        let mut dw = Dewindower::new(1024);
+
+        for i in 0..6 {
+            if i == 2 {
+                w = Windower::new(WindowFunction::Hanning, 300, 50);
+            }
+            if i == 4 {
+                w = Windower::new(WindowFunction::Hanning, 1024, 64);
+            }
+            for n in w.process_chunk(c.clone()).into_iter() {
+                dw.process_chunk(n);
             }
         }
     }
