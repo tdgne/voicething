@@ -35,22 +35,6 @@ impl<S: Sample> Dewindower<S> {
         }
     }
 
-    pub fn input(&self) -> Option<&ChunkReceiver<S>> {
-        self.input.as_ref()
-    }
-
-    pub fn outputs(&self) -> &[SyncChunkSender<S>] {
-        self.outputs.as_ref()
-    }
-
-    pub fn set_input(&mut self, rx: Option<ChunkReceiver<S>>) {
-        self.input = rx;
-    }
-
-    pub fn add_output(&mut self, tx: SyncChunkSender<S>) {
-        self.outputs.push(tx);
-    }
-
     fn triangular_window(x: usize, length: usize) -> f32 {
         let x = x as f32 / length as f32;
         1.0 - (x - 0.5).abs() * 2.0
@@ -61,7 +45,7 @@ impl<S: Sample> Dewindower<S> {
         0.5 - 0.5 * (2.0 * 3.141592 * x).cos()
     }
 
-    pub fn process_chunk(&mut self, chunk: SampleChunk<S>) -> Vec<SampleChunk<S>> {
+    fn process_chunk_mul(&mut self, chunk: SampleChunk<S>) -> Vec<SampleChunk<S>> {
         let delay = *chunk.window_info().clone().unwrap().delay();
         for c in 0..*chunk.metadata().channels() {
             if self.buffer.len() <= c {
@@ -96,11 +80,33 @@ impl<S: Sample> Dewindower<S> {
         }
         dewindowed_chunks
     }
+}
 
-    pub fn run_once(&mut self) {
+impl<S: Sample> SingleInput<S, S> for Dewindower<S> {
+    fn input(&self) -> Option<&ChunkReceiver<S>> {
+        self.input.as_ref()
+    }
+
+    fn outputs(&self) -> &[SyncChunkSender<S>] {
+        self.outputs.as_ref()
+    }
+
+    fn set_input(&mut self, rx: Option<ChunkReceiver<S>>) {
+        self.input = rx;
+    }
+
+    fn add_output(&mut self, tx: SyncChunkSender<S>) {
+        self.outputs.push(tx);
+    }
+
+    fn process_chunk(&mut self, chunk: SampleChunk<S>) -> SampleChunk<S> {
+        panic!("this should never be used")
+    }
+
+    fn run_once(&mut self) {
         if let Some(input) = self.input() {
             if let Some(chunk) = input.try_recv().ok() {
-                let chunks = self.process_chunk(chunk);
+                let chunks = self.process_chunk_mul(chunk);
                 for output in self.outputs().iter() {
                     for chunk in chunks.iter() {
                         let _ = output.try_send(chunk.clone());

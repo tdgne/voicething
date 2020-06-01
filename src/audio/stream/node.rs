@@ -2,6 +2,8 @@ use crate::audio::common::{Sample, SampleChunk};
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
 use uuid::Uuid;
+#[macro_use]
+use enum_dispatch::enum_dispatch;
 
 pub type ChunkSender<S> = Sender<SampleChunk<S>>;
 
@@ -96,8 +98,8 @@ macro_rules! operate_connection {
     (match $from:expr, $to:expr, do($ident_f:ident, $ident_t:ident){$do:expr}, err{$err:expr}) => {
         operate_connection!(
             match $from, $to, {
-                ( Input => Output, Psola, Windower,),
-                ( Psola => Output, Windower,),
+                ( Input => Output, Psola, Windower, ),
+                ( Psola => Output, Windower, ),
                 ( Windower => Psola, Dewindower, ),
                 ( Dewindower => Output, Psola, Windower, ),
             }, do($ident_f, $ident_t) {

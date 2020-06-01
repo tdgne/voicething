@@ -413,6 +413,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52ba6eb47c2131e784a38b726eb54c1e1484904f013e576a25354d0124161af6"
 
 [[package]]
+name = "enum_dispatch"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "362f2fdb0b2cbc7a1926a6fb32281ee854a23a3d5c77e5291a2ffa8159dcc48e"
+dependencies = [
+ "once_cell",
+ "proc-macro2 1.0.13",
+ "quote 1.0.6",
+ "syn",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1759,6 +1771,7 @@ dependencies = [
  "clap",
  "cpal",
  "derive-new",
+ "enum_dispatch",
  "getset",
  "gio",
  "glium",
