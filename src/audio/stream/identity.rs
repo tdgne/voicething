@@ -1,8 +1,6 @@
 use super::super::common::*;
 use super::node::*;
-use super::port::*;
 use getset::Getters;
-use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
@@ -10,7 +8,7 @@ pub struct IdentityNode {
     inputs: Vec<InputPort>,
     outputs: Vec<OutputPort>,
     name: String,
-    id: Uuid,
+    id: NodeId,
 }
 
 impl IdentityNode {
@@ -19,7 +17,7 @@ impl IdentityNode {
             inputs: vec![],
             outputs: vec![],
             name,
-            id: Uuid::new_v4(),
+            id: NodeId::new(),
         }
     }
     
@@ -29,7 +27,7 @@ impl IdentityNode {
 }
 
 impl NodeTrait for IdentityNode {
-    fn id(&self) -> Uuid {
+    fn id(&self) -> NodeId {
         self.id
     }
     fn inputs(&self) -> &[InputPort] {

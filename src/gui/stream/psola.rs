@@ -34,7 +34,7 @@ impl PsolaNode {
     }
 
     pub fn render_control_window(&mut self, ui: &Ui) {
-        Window::new(&im_str!("TD-PSOLA {}", self.id()))
+        Window::new(&im_str!("TD-PSOLA {:?}", self.id()))
             .always_auto_resize(true)
             .build(&ui, || {
                 VerticalSlider::new(

@@ -1,11 +1,9 @@
 use super::super::common::*;
 use super::node::*;
-use super::port::*;
 use getset::Getters;
 use rustfft::num_complex::Complex32;
 use rustfft::FFTplanner;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 struct PsolaInfo {
@@ -21,11 +19,11 @@ pub struct PsolaNode {
     ratio: f32,
     #[serde(skip)]
     psola_info: Vec<PsolaInfo>,
-    id: Uuid,
+    id: NodeId,
 }
 
 impl NodeTrait for PsolaNode {
-    fn id(&self) -> Uuid {
+    fn id(&self) -> NodeId {
         self.id
     }
     fn inputs(&self) -> &[InputPort] {
@@ -73,7 +71,7 @@ impl PsolaNode {
             outputs: vec![],
             ratio,
             psola_info: vec![],
-            id: Uuid::new_v4(),
+            id: NodeId::new(),
         }
     }
 

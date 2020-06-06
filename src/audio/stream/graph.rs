@@ -8,14 +8,13 @@ use std::{
     fmt::{Display, Formatter},
 };
 use std::sync::mpsc::{sync_channel};
-use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Graph {
-    nodes: HashMap<Uuid, Arc<Mutex<Node>>>,
-    edges: HashMap<Uuid, Uuid>,
-    input_port_node_map: HashMap<Uuid, Uuid>,
-    output_port_node_map: HashMap<Uuid, Uuid>,
+    nodes: HashMap<NodeId, Arc<Mutex<Node>>>,
+    edges: HashMap<OutputPortId, InputPortId>,
+    input_port_node_map: HashMap<InputPortId, NodeId>,
+    output_port_node_map: HashMap<OutputPortId, NodeId>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,22 +57,22 @@ impl Graph {
         }
     }
 
-    pub fn is_input_port(&self, id: &Uuid) -> bool {
+    pub fn is_input_port(&self, id: &InputPortId) -> bool {
         self.input_port_node_map.get(id).is_some()
     }
 
-    pub fn is_output_port(&self, id: &Uuid) -> bool {
+    pub fn is_output_port(&self, id: &OutputPortId) -> bool {
         self.output_port_node_map.get(id).is_some()
     }
 
-    pub fn add_input(&mut self, node_id: &Uuid) -> Result<Uuid, Box<dyn Error>> {
+    pub fn add_input(&mut self, node_id: &NodeId) -> Result<InputPortId, Box<dyn Error>> {
         let node = self.node(node_id)?;
         let id = node.lock().unwrap().add_input().unwrap().id().clone();
         self.input_port_node_map.insert(id, *node_id);
         Ok(id)
     }
 
-    pub fn add_output(&mut self, node_id: &Uuid) -> Result<Uuid, Box<dyn Error>> {
+    pub fn add_output(&mut self, node_id: &NodeId) -> Result<OutputPortId, Box<dyn Error>> {
         let node = self.node(node_id)?;
         let id = node.lock().unwrap().add_output().unwrap().id().clone();
         self.output_port_node_map.insert(id, *node_id);
@@ -118,11 +117,11 @@ impl Graph {
         Ok(())
     }
 
-    pub fn nodes(&self) -> &HashMap<Uuid, Arc<Mutex<Node>>> {
+    pub fn nodes(&self) -> &HashMap<NodeId, Arc<Mutex<Node>>> {
         &self.nodes
     }
 
-    pub fn edges(&self) -> &HashMap<Uuid, Uuid> {
+    pub fn edges(&self) -> &HashMap<OutputPortId, InputPortId> {
         &self.edges
     }
 
@@ -130,20 +129,20 @@ impl Graph {
         self.nodes.insert(node.id(), Arc::new(Mutex::new(node)));
     }
 
-    pub fn remove(&mut self, id: Uuid) -> Option<Arc<Mutex<Node>>> {
+    pub fn remove(&mut self, id: NodeId) -> Option<Arc<Mutex<Node>>> {
         let node = self.node(&id).unwrap();
         let input_ids = node.lock().unwrap().inputs().iter().map(|p| p.id()).collect::<Vec<_>>();
-        let output_ids = node.lock().unwrap().inputs().iter().map(|p| p.id()).collect::<Vec<_>>();
+        let output_ids = node.lock().unwrap().outputs().iter().map(|p| p.id()).collect::<Vec<_>>();
         for port in input_ids.iter() {
-            self.detach_port(port);
+            self.detach_input_port(port);
         }
         for port in output_ids.iter() {
-            self.detach_port(port);
+            self.detach_output_port(port);
         }
         self.nodes.remove(&id)
     }
 
-    pub fn node(&self, id: &Uuid) -> Result<Arc<Mutex<Node>>, ExistenceError> {
+    pub fn node(&self, id: &NodeId) -> Result<Arc<Mutex<Node>>, ExistenceError> {
         if let Some(ref node) = self.nodes.get(&id) {
             Ok(Arc::clone(node))
         } else {
@@ -151,9 +150,9 @@ impl Graph {
         }
     }
 
-    pub fn connect_ports(&mut self, from_id: &Uuid, to_id: &Uuid) -> Result<(), Box<dyn Error>> {
-        self.detach_port(from_id);
-        self.detach_port(to_id);
+    pub fn connect_ports(&mut self, from_id: &OutputPortId, to_id: &InputPortId) -> Result<(), Box<dyn Error>> {
+        self.detach_output_port(from_id);
+        self.detach_input_port(to_id);
         let from_node = self.node(self.output_port_node_map.get(from_id).unwrap())?;
         let to_node = self.node(self.input_port_node_map.get(to_id).unwrap())?;
         let (tx, rx) = sync_channel(16);
@@ -175,7 +174,7 @@ impl Graph {
         Ok(())
     }
 
-    pub fn disconnect_ports(&mut self, from_id: &Uuid, to_id: &Uuid) -> Result<(), Box<dyn Error>> {
+    pub fn disconnect_ports(&mut self, from_id: &OutputPortId, to_id: &InputPortId) -> Result<(), Box<dyn Error>> {
         let from_node = self.node(self.output_port_node_map.get(from_id).unwrap())?;
         let to_node = self.node(self.input_port_node_map.get(to_id).unwrap())?;
         for port in from_node.lock().unwrap().outputs_mut().iter_mut() {
@@ -186,7 +185,7 @@ impl Graph {
             }
         }
         for port in to_node.lock().unwrap().inputs_mut().iter_mut() {
-            if port.id() == *from_id {
+            if port.id() == *to_id {
                 port.rx = None;
                 port.output_id = None;
                 break;
@@ -196,12 +195,27 @@ impl Graph {
         Ok(())
     }
 
-    pub fn detach_port(&mut self, id: &Uuid) -> Result<(), Box<dyn Error>> {
+    pub fn detach_output_port(&mut self, id: &OutputPortId) -> Result<(), Box<dyn Error>> {
         let mut other_id = None;
         for (k, v) in self.edges.iter() {
             if *k == *id {
                 other_id = Some(*v);
             }
+        }
+        if let Some(other_id) = other_id {
+            if self.output_port_node_map.get(id).is_some() {
+                self.disconnect_ports(id, &other_id)
+            } else {
+                panic!("bad graph data");
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn detach_input_port(&mut self, id: &InputPortId) -> Result<(), Box<dyn Error>> {
+        let mut other_id = None;
+        for (k, v) in self.edges.iter() {
             if *v == *id {
                 other_id = Some(*k);
             }
@@ -210,7 +224,7 @@ impl Graph {
             if self.input_port_node_map.get(id).is_some() {
                 self.disconnect_ports(&other_id, id)
             } else {
-                self.disconnect_ports(id, &other_id)
+                panic!("bad graph data");
             }
         } else {
             Ok(())

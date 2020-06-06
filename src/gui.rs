@@ -194,8 +194,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                                     .or(inputs.render(&ui, &mut node_editor_state));
                             }
                             for outputs in node.lock().unwrap().outputs().iter() {
-                                connection_request = connection_request
-                                    .or(outputs.render(&ui, &mut node_editor_state));
+                                outputs.render(&ui, &mut node_editor_state);
                             }
                         }
                     }
