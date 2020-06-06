@@ -35,7 +35,7 @@ impl Sample for f32 {}
 impl Sample for Complex32 {}
 
 #[derive(Getters, Setters, Clone, Debug, new)]
-pub struct SampleChunk<S: Sample> {
+pub struct GenericSampleChunk<S: Sample> {
     samples: Vec<Vec<S>>,
     #[getset(get = "pub")]
     metadata: AudioMetadata,
@@ -45,7 +45,7 @@ pub struct SampleChunk<S: Sample> {
     window_info: Option<WindowInfo>,
 }
 
-impl<S: Sample> SampleChunk<S> {
+impl<S: Sample> GenericSampleChunk<S> {
     pub fn from_flat_samples(
         flat_samples: &[S],
         metadata: AudioMetadata,
@@ -98,6 +98,12 @@ impl<S: Sample> SampleChunk<S> {
         }
         flattened
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum SampleChunk {
+    Real(GenericSampleChunk<f32>),
+    Complex(GenericSampleChunk<Complex32>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

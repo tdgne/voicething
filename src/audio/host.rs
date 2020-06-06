@@ -1,13 +1,12 @@
 use cpal;
 use cpal::traits::*;
 use getset::{Getters, Setters};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, mpsc::{SyncSender, Receiver}, Arc, Mutex};
 use std::thread;
 
-use crate::audio::common::{AudioMetadata, SampleChunk};
+use crate::audio::common::{AudioMetadata, SampleChunk, GenericSampleChunk};
 use crate::config;
 use crate::audio::rechunker::*;
-use crate::audio::stream::{ChunkReceiver, SyncChunkSender};
 
 #[derive(Clone)]
 pub struct StreamInfo {
@@ -21,8 +20,8 @@ pub struct Host {
     event_loop: Arc<cpal::EventLoop>,
     input_stream: Arc<Mutex<Option<StreamInfo>>>,
     output_stream: Arc<Mutex<Option<StreamInfo>>>,
-    sender: Arc<Mutex<Option<SyncChunkSender<f32>>>>,
-    receiver: Arc<Mutex<Option<ChunkReceiver<f32>>>>,
+    sender: Arc<Mutex<Option<SyncSender<SampleChunk>>>>,
+    receiver: Arc<Mutex<Option<Receiver<SampleChunk>>>>,
     rechunker: Arc<Mutex<Option<Rechunker>>>,
 }
 
@@ -139,11 +138,11 @@ impl Host {
         *self.output_stream.lock().unwrap() = Some(stream_info);
     }
 
-    pub fn set_sender(&self, sender: Option<SyncChunkSender<f32>>) {
+    pub fn set_sender(&self, sender: Option<SyncSender<SampleChunk>>) {
         *self.sender.lock().unwrap() = sender;
     }
 
-    pub fn set_receiver(&self, receiver: Option<ChunkReceiver<f32>>) {
+    pub fn set_receiver(&self, receiver: Option<Receiver<SampleChunk>>) {
         *self.receiver.lock().unwrap() = receiver;
     }
 
@@ -220,23 +219,26 @@ impl Host {
 fn chunk_from_buffer(
     format: cpal::Format,
     buffer: &cpal::UnknownTypeInputBuffer,
-) -> SampleChunk<f32> {
+) -> SampleChunk {
     let metadata = AudioMetadata::new(format.channels as usize, format.sample_rate.0 as usize);
     match buffer {
         cpal::UnknownTypeInputBuffer::U16(buffer) => unimplemented!(),
         cpal::UnknownTypeInputBuffer::I16(buffer) => unimplemented!(),
         cpal::UnknownTypeInputBuffer::F32(buffer) => {
-            SampleChunk::from_flat_samples(buffer, metadata).unwrap()
+            SampleChunk::Real(GenericSampleChunk::from_flat_samples(buffer, metadata).unwrap())
         }
     }
 }
 
-fn write_chunk_to_buffer(chunk: SampleChunk<f32>, buffer: &mut cpal::UnknownTypeOutputBuffer) {
+fn write_chunk_to_buffer(chunk: SampleChunk, buffer: &mut cpal::UnknownTypeOutputBuffer) {
     match buffer {
         cpal::UnknownTypeOutputBuffer::U16(buffer) => unimplemented!(),
         cpal::UnknownTypeOutputBuffer::I16(buffer) => unimplemented!(),
         cpal::UnknownTypeOutputBuffer::F32(buffer) => {
-            let samples = chunk.flattened_samples();
+            let samples = match chunk {
+                SampleChunk::Real(chunk) => chunk.flattened_samples(),
+                _ => panic!("Incompatible input"),
+            };
             for (i, b) in buffer.iter_mut().enumerate() {
                 *b = samples[i];
             }

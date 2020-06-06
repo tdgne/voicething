@@ -1,5 +1,6 @@
 use imgui::*;
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, sync_channel, Receiver, SyncSender};
 use std::thread;
 use serde_json;
 
@@ -7,15 +8,15 @@ mod stream;
 mod support;
 use crate::audio;
 use crate::audio::rechunker::Rechunker;
-use crate::audio::common::*;
 use crate::audio::stream::*;
+use crate::audio::common::*;
 use stream::*;
 
-pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunkSender<f32>) {
+pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSender<SampleChunk>) {
     let system = support::init("voicething");
 
     let rechunker = Arc::new(Mutex::new(Rechunker::new(2, 44100)));
-    let (rechunk_tx, rechunk_rx) = chunk_channel();
+    let (rechunk_tx, rechunk_rx) = channel();
     thread::spawn(move || loop {
         rechunker.lock().unwrap().feed_chunk(input.recv().unwrap());
         while let Some(chunk) = rechunker.lock().unwrap().pull_chunk(1024) {
@@ -24,31 +25,51 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
     });
 
     let mut g = Graph::new();
-    let mut node_editor_state = NodeEditorState::new();
+    // let mut node_editor_state = NodeEditorState::new();
 
-    let (input_monitor_tx, input_monitor_rx) = sync_chunk_channel(16);
+    let (input_monitor_tx, input_monitor_rx) = sync_channel(16);
     let mut input_node = IdentityNode::new("Input".to_string());
     let input_node_id = input_node.id();
-    input_node.set_input(Some(rechunk_rx));
-    input_node.add_output(input_monitor_tx);
-    g.add(Node::Input(input_node));
-    node_editor_state.set_pos(input_node_id, [20.0, 20.0]);
+    {
+        let input_port = input_node.add_input().unwrap();
+        input_port.rx = Some(rechunk_rx);
+    }
+    {
+        let output_port = input_node.add_output().unwrap();
+        output_port.tx = Some(input_monitor_tx);
+    }
+    g.add(Node::Identity(input_node));
+    // node_editor_state.set_pos(input_node_id, [20.0, 20.0]);
 
     let psola_node = PsolaNode::new(1.0);
     let psola_node_id = psola_node.id();
     g.add(Node::Psola(psola_node));
-    node_editor_state.set_pos(psola_node_id, [20.0, 60.0]);
+    // node_editor_state.set_pos(psola_node_id, [20.0, 60.0]);
 
-    let (output_monitor_tx, output_monitor_rx) = sync_chunk_channel(16);
+    let (output_monitor_tx, output_monitor_rx) = sync_channel(16);
     let mut output_node = IdentityNode::new("Output".to_string());
     let output_node_id = output_node.id();
-    output_node.add_output(output_monitor_tx);
-    output_node.add_output(output);
-    g.add(Node::Output(output_node));
-    node_editor_state.set_pos(output_node_id, [20.0, 100.0]);
+    {
+        let output_port = output_node.add_output().unwrap();
+        output_port.tx = Some(output_monitor_tx);
+    }
+    {
+        let output_port = output_node.add_output().unwrap();
+        output_port.tx = Some(output);
+    }
+    g.add(Node::Identity(output_node));
+    // node_editor_state.set_pos(output_node_id, [20.0, 100.0]);
 
-    g.connect(&input_node_id, &psola_node_id).unwrap();
-    g.connect(&psola_node_id, &output_node_id).unwrap();
+    {
+        let p1 = g.add_output(&input_node_id).unwrap();
+        let p2 = g.add_input(&psola_node_id).unwrap();
+        g.connect_ports(&p1, &p2).unwrap();
+    }
+    {
+        let p1 = g.add_output(&psola_node_id).unwrap();
+        let p2 = g.add_input(&output_node_id).unwrap();
+        g.connect_ports(&p1, &p2).unwrap();
+    }
 
     let g = Arc::new(Mutex::new(g));
 
@@ -100,12 +121,14 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                         }
                     });
                     ui.menu(im_str!("Nodes"), true, || {
+                        /*
                         if MenuItem::new(im_str!("Windower")).build(&ui) {
                             g.lock().unwrap().add(Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64)));
                         }
                         if MenuItem::new(im_str!("Dewindower")).build(&ui) {
                             g.lock().unwrap().add(Node::Dewindower(Dewindower::new(1024)));
                         }
+                        */
                     });
                 });
             });
@@ -113,10 +136,10 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                 .always_auto_resize(true)
                 .position([0.0, 20.0], Condition::FirstUseEver)
                 .build(&ui, || {
-                    while let Ok(chunk) = input_rx.try_recv() {
+                    while let Ok(SampleChunk::Real(chunk)) = input_rx.try_recv() {
                         input_amplitudes = chunk.samples(0).to_vec();
                     }
-                    while let Ok(chunk) = output_rx.try_recv() {
+                    while let Ok(SampleChunk::Real(chunk)) = output_rx.try_recv() {
                         output_amplitudes = chunk.samples(0).to_vec();
                     }
                     ui.plot_lines(im_str!(""), &input_amplitudes)
@@ -132,6 +155,7 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                         .graph_size([300.0, 100.0])
                         .build();
                 });
+            /*
             Window::new(im_str!("Nodes"))
                 .position([400.0, 20.0], Condition::FirstUseEver)
                 .size([600.0, 600.0], Condition::FirstUseEver)
@@ -182,6 +206,7 @@ pub fn main_loop(host: audio::Host, input: ChunkReceiver<f32>, output: SyncChunk
                         }
                     }
                 });
+            */
         });
     }
 }

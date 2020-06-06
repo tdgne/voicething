@@ -1,10 +1,11 @@
 use super::super::common::*;
 use super::node::*;
+use super::port::*;
 use getset::Getters;
 use rustfft::num_complex::Complex32;
 use rustfft::FFTplanner;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Debug)]
 struct PsolaInfo {
@@ -15,26 +16,60 @@ struct PsolaInfo {
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
 pub struct PsolaNode {
-    #[serde(skip)]
-    input: Option<ChunkReceiver<f32>>,
-    #[serde(skip)]
-    outputs: Vec<SyncChunkSender<f32>>,
+    inputs: Vec<InputPort>,
+    outputs: Vec<OutputPort>,
     ratio: f32,
     #[serde(skip)]
     psola_info: Vec<PsolaInfo>,
     id: Uuid,
 }
 
-impl HasId for PsolaNode {
+impl NodeTrait for PsolaNode {
     fn id(&self) -> Uuid {
         self.id
+    }
+    fn inputs(&self) -> &[InputPort] {
+        &self.inputs
+    }
+    fn outputs(&self) -> &[OutputPort] {
+        &self.outputs
+    }
+    fn inputs_mut(&mut self) -> &mut [InputPort] {
+        &mut self.inputs
+    }
+    fn outputs_mut(&mut self) -> &mut [OutputPort] {
+        &mut self.outputs
+    }
+    fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {
+        if self.inputs.len() == 0 {
+            self.inputs.push(InputPort::new(self.id));
+            Ok(&mut self.inputs[0])
+        } else {
+            Err(Box::new(PortAdditionError))
+        }
+    }
+    fn add_output(&mut self) -> Result<&mut OutputPort, Box<dyn std::error::Error>> {
+        self.outputs.push(OutputPort::new(self.id));
+        let l = self.outputs.len();
+        Ok(&mut self.outputs[l - 1])
+    }
+    fn run_once(&mut self) {
+        if self.inputs.len() != 1 {
+            return;
+        }
+        if let Some(chunk) = self.inputs[0].try_recv().ok() {
+            let chunk = self.process_chunk(chunk);
+            for output in self.outputs().iter() {
+                let _ = output.try_send(chunk.clone());
+            }
+        }
     }
 }
 
 impl PsolaNode {
     pub fn new(ratio: f32) -> Self {
         Self {
-            input: None,
+            inputs: vec![],
             outputs: vec![],
             ratio,
             psola_info: vec![],
@@ -170,26 +205,12 @@ impl PsolaNode {
             (data.to_vec(), info.clone())
         }
     }
-}
 
-impl SingleInput<f32, f32> for PsolaNode {
-    fn input(&self) -> Option<&ChunkReceiver<f32>> {
-        self.input.as_ref()
-    }
-
-    fn outputs(&self) -> &[SyncChunkSender<f32>] {
-        self.outputs.as_ref()
-    }
-
-    fn set_input(&mut self, rx: Option<ChunkReceiver<f32>>) {
-        self.input = rx;
-    }
-
-    fn add_output(&mut self, tx: SyncChunkSender<f32>) {
-        self.outputs.push(tx);
-    }
-
-    fn process_chunk(&mut self, chunk: SampleChunk<f32>) -> SampleChunk<f32> {
+    fn process_chunk(&mut self, chunk: SampleChunk) -> SampleChunk {
+        let chunk = match chunk {
+            SampleChunk::Real(chunk) => chunk,
+            _ => panic!("Incompatible input"),
+        };
         let channels = *chunk.metadata().channels();
         while self.psola_info.len() < channels {
             self.psola_info.push(PsolaInfo {
@@ -202,8 +223,12 @@ impl SingleInput<f32, f32> for PsolaNode {
             .zip(self.psola_info.iter())
             .map(|(c, info)| self.psola(chunk.samples(c), info))
             .unzip();
-        let out_chunk =
-            SampleChunk::new(samples, chunk.metadata().clone(), *chunk.duration_samples(), chunk.window_info().clone());
+        let out_chunk = SampleChunk::Real(GenericSampleChunk::new(
+            samples,
+            chunk.metadata().clone(),
+            *chunk.duration_samples(),
+            chunk.window_info().clone(),
+        ));
         self.psola_info = info;
         out_chunk
     }

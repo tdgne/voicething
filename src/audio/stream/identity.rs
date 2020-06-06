@@ -1,56 +1,70 @@
 use super::super::common::*;
 use super::node::*;
+use super::port::*;
 use getset::Getters;
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
-pub struct IdentityNode<S: Sample> {
-    #[serde(skip)]
-    input: Option<ChunkReceiver<S>>,
-    #[serde(skip)]
-    outputs: Vec<SyncChunkSender<S>>,
-    #[serde(skip)]
-    #[getset(get = "pub")]
+pub struct IdentityNode {
+    inputs: Vec<InputPort>,
+    outputs: Vec<OutputPort>,
     name: String,
     id: Uuid,
 }
 
-impl<S: Sample> HasId for IdentityNode<S> {
-    fn id(&self) -> Uuid {
-        self.id
-    }
-}
-
-impl<S: Sample> IdentityNode<S> {
+impl IdentityNode {
     pub fn new(name: String) -> Self {
         Self {
-            input: None,
+            inputs: vec![],
             outputs: vec![],
             name,
             id: Uuid::new_v4(),
         }
     }
+    
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
-impl<S: Sample> SingleInput<S, S> for IdentityNode<S> {
-    fn input(&self) -> Option<&ChunkReceiver<S>> {
-        self.input.as_ref()
+impl NodeTrait for IdentityNode {
+    fn id(&self) -> Uuid {
+        self.id
     }
-
-    fn outputs(&self) -> &[SyncChunkSender<S>] {
-        self.outputs.as_ref()
+    fn inputs(&self) -> &[InputPort] {
+        &self.inputs
     }
-
-    fn set_input(&mut self, rx: Option<ChunkReceiver<S>>) {
-        self.input = rx;
+    fn outputs(&self) -> &[OutputPort] {
+        &self.outputs
     }
-
-    fn add_output(&mut self, tx: SyncChunkSender<S>) {
-        self.outputs.push(tx);
+    fn inputs_mut(&mut self) -> &mut [InputPort] {
+        &mut self.inputs
     }
-
-    fn process_chunk(&mut self, chunk: SampleChunk<S>) -> SampleChunk<S> {
-        chunk
+    fn outputs_mut(&mut self) -> &mut [OutputPort] {
+        &mut self.outputs
+    }
+    fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {
+        if self.inputs.len() == 0 {
+            self.inputs.push(InputPort::new(self.id));
+            Ok(&mut self.inputs[0])
+        } else {
+            Err(Box::new(PortAdditionError))
+        }
+    }
+    fn add_output(&mut self) -> Result<&mut OutputPort, Box<dyn std::error::Error>> {
+        self.outputs.push(OutputPort::new(self.id));
+        let l = self.outputs.len();
+        Ok(&mut self.outputs[l - 1])
+    }
+    fn run_once(&mut self) {
+        if self.inputs.len() != 1 {
+            return;
+        }
+        if let Some(chunk) = self.inputs[0].try_recv().ok() {
+            for output in self.outputs().iter() {
+                let _ = output.try_send(chunk.clone());
+            }
+        }
     }
 }

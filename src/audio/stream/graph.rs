@@ -1,5 +1,3 @@
-#[macro_use]
-use crate::operate_connection;
 use super::node::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -9,12 +7,15 @@ use std::{
     fmt,
     fmt::{Display, Formatter},
 };
+use std::sync::mpsc::{sync_channel};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Graph {
     nodes: HashMap<Uuid, Arc<Mutex<Node>>>,
-    edges: HashMap<Uuid, Vec<Uuid>>,
+    edges: HashMap<Uuid, Uuid>,
+    input_port_node_map: HashMap<Uuid, Uuid>,
+    output_port_node_map: HashMap<Uuid, Uuid>,
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +53,23 @@ impl Graph {
         Self {
             nodes: HashMap::new(),
             edges: HashMap::new(),
+            input_port_node_map: HashMap::new(),
+            output_port_node_map: HashMap::new(),
         }
+    }
+
+    pub fn add_input(&mut self, node_id: &Uuid) -> Result<Uuid, Box<dyn Error>> {
+        let node = self.node(node_id)?;
+        let id = node.lock().unwrap().add_input().unwrap().id().clone();
+        self.input_port_node_map.insert(id, *node_id);
+        Ok(id)
+    }
+
+    pub fn add_output(&mut self, node_id: &Uuid) -> Result<Uuid, Box<dyn Error>> {
+        let node = self.node(node_id)?;
+        let id = node.lock().unwrap().add_output().unwrap().id().clone();
+        self.output_port_node_map.insert(id, *node_id);
+        Ok(id)
     }
 
     fn bfs_run_once(&self, node: Arc<Mutex<Node>>) -> Result<(), Box<dyn Error>> {
@@ -61,13 +78,14 @@ impl Graph {
         while !q.is_empty() {
             let node = q.pop_front().unwrap();
             node.lock().unwrap().run_once();
-            for output in self
-                .edges
-                .get(&node.lock().unwrap().id())
-                .unwrap_or(&vec![])
-                .iter()
-            {
-                q.push_back(self.node(output).unwrap())
+            for output_port in node.lock().unwrap().outputs() {
+                if let Some(other_end_port_id) = self
+                    .edges
+                    .get(&output_port.id())
+                {
+                    let other_end_node_id = self.input_port_node_map.get(&other_end_port_id).unwrap();
+                    q.push_back(self.node(&other_end_node_id)?);
+                }
             }
         }
         Ok(())
@@ -77,8 +95,10 @@ impl Graph {
         let input = {
             let mut input = Err(ExistenceError("Input"));
             for (_, v) in self.nodes.iter() {
-                if let Node::Input(_) = &*v.lock().unwrap() {
-                    input = Ok(v.clone());
+                if let Node::Identity(node) = &*v.lock().unwrap() {
+                    if node.name() == "Input" {
+                        input = Ok(v.clone());
+                    }
                 }
             }
             input?
@@ -94,17 +114,24 @@ impl Graph {
         &self.nodes
     }
 
-    pub fn edges(&self) -> &HashMap<Uuid, Vec<Uuid>> {
+    pub fn edges(&self) -> &HashMap<Uuid, Uuid> {
         &self.edges
     }
 
     pub fn add(&mut self, node: Node) {
-        self.edges.insert(node.id(), vec![]);
         self.nodes.insert(node.id(), Arc::new(Mutex::new(node)));
     }
 
     pub fn remove(&mut self, id: Uuid) -> Option<Arc<Mutex<Node>>> {
-        self.detach(id);
+        let node = self.node(&id).unwrap();
+        let input_ids = node.lock().unwrap().inputs().iter().map(|p| p.id()).collect::<Vec<_>>();
+        let output_ids = node.lock().unwrap().inputs().iter().map(|p| p.id()).collect::<Vec<_>>();
+        for port in input_ids.iter() {
+            self.detach_port(port);
+        }
+        for port in output_ids.iter() {
+            self.detach_port(port);
+        }
         self.nodes.remove(&id)
     }
 
@@ -116,106 +143,66 @@ impl Graph {
         }
     }
 
-    pub fn connect(&mut self, from_id: &Uuid, to_id: &Uuid) -> Result<(), Box<dyn Error>> {
-        if *from_id == *to_id {
-            // TODO
-            return Ok(());
-        }
-        let mut detach_id = None;
-        {
-            let from_rc = self.node(from_id)?;
-            let from = from_rc.lock().unwrap();
-            let to_rc = self.node(to_id)?;
-            let to = to_rc.lock().unwrap();
-            let cerr = Err(CompatibilityError);
-            operate_connection!(
-                match &*from, &*to, do(f, t){
-                    {
-                        detach_id = Some(*to_id);
-                    }
-                }, err{
-                    cerr?
-                }
-            );
-        }
-        if let Some(id) = detach_id {
-            self.detach(id)?;
-        }
-        {
-            let from_rc = self.node(from_id)?;
-            let mut from = from_rc.lock().unwrap();
-            let to_rc = self.node(to_id)?;
-            let mut to = to_rc.lock().unwrap();
-            let cerr = Err(CompatibilityError);
-            let (tx, rx) = sync_chunk_channel(16);
-            operate_connection!(
-                match &mut *from, &mut *to, do(f, t){
-                    {
-                        f.add_output(tx);
-                        t.set_input(Some(rx));
-                    }
-                }, err{
-                    cerr?
-                }
-            );
-        }
-        self.connect_edge(*from_id, *to_id)?;
-        Ok(())
-    }
-
-    pub fn disconnect(&mut self, from_id: &Uuid, to_id: &Uuid) -> Result<(), Box<dyn Error>> {
-        let from_rc = self.node(from_id)?;
-        let mut from = from_rc.lock().unwrap();
-        let to_rc = self.node(to_id)?;
-        let mut to = to_rc.lock().unwrap();
-        let cerr = Err(CompatibilityError);
-        operate_connection!(
-            match &mut *from, &mut *to, do(f, t){
-                {
-                    self.disconnect_edge(*from_id, *to_id)?;
-                    t.set_input(None);
-                }
-            }, err{
-                cerr?
-            }
-        );
-        Ok(())
-    }
-
-    pub fn detach(&mut self, id: Uuid) -> Result<(), Box<dyn Error>> {
-        for (from_id, tos) in self.edges.clone().iter() {
-            if *from_id == id {
-                for to_id in tos.iter() {
-                    self.disconnect(&id, to_id)?;
-                }
-            } else {
-                for _ in tos.iter().filter(|to_id| **to_id == id) {
-                    self.disconnect(from_id, &id)?;
-                }
+    pub fn connect_ports(&mut self, from_id: &Uuid, to_id: &Uuid) -> Result<(), Box<dyn Error>> {
+        self.detach_port(from_id);
+        self.detach_port(to_id);
+        let from_node = self.node(self.output_port_node_map.get(from_id).unwrap())?;
+        let to_node = self.node(self.input_port_node_map.get(to_id).unwrap())?;
+        let (tx, rx) = sync_channel(16);
+        for port in from_node.lock().unwrap().outputs_mut().iter_mut() {
+            if port.id() == *from_id {
+                port.tx = Some(tx);
+                port.input_id = Some(*to_id);
+                break;
             }
         }
+        for port in to_node.lock().unwrap().inputs_mut().iter_mut() {
+            if port.id() == *from_id {
+                port.rx = Some(rx);
+                port.output_id = Some(*from_id);
+                break;
+            }
+        }
+        self.edges.insert(*from_id, *to_id);
         Ok(())
     }
 
-    fn connect_edge(&mut self, from_id: Uuid, to_id: Uuid) -> Result<(), Box<dyn Error>> {
-        if let Some(edges) = self.edges.get_mut(&from_id) {
-            let _ = edges.remove_item(&to_id);
-            edges.push(to_id);
+    pub fn disconnect_ports(&mut self, from_id: &Uuid, to_id: &Uuid) -> Result<(), Box<dyn Error>> {
+        let from_node = self.node(self.output_port_node_map.get(from_id).unwrap())?;
+        let to_node = self.node(self.input_port_node_map.get(to_id).unwrap())?;
+        for port in from_node.lock().unwrap().outputs_mut().iter_mut() {
+            if port.id() == *from_id {
+                port.tx = None;
+                port.input_id = None;
+                break;
+            }
+        }
+        for port in to_node.lock().unwrap().inputs_mut().iter_mut() {
+            if port.id() == *from_id {
+                port.rx = None;
+                port.output_id = None;
+                break;
+            }
+        }
+        self.edges.remove(&from_id);
+        Ok(())
+    }
+
+    pub fn detach_port(&mut self, id: &Uuid) -> Result<(), Box<dyn Error>> {
+        let mut other_id = None;
+        for (k, v) in self.edges.iter() {
+            if *k == *id {
+                other_id = Some(*v);
+            }
+            if *v == *id {
+                other_id = Some(*k);
+            }
+        }
+        if let Some(other_id) = other_id {
+            self.disconnect_ports(id, &other_id)
         } else {
-            self.edges.insert(from_id, vec![to_id]);
+            Ok(())
         }
-        Ok(())
-    }
-
-    fn disconnect_edge(&mut self, from_id: Uuid, to_id: Uuid) -> Result<(), ExistenceError> {
-        if let Some(edges) = self.edges.get_mut(&from_id) {
-            if let None = edges.remove_item(&to_id) {
-                return Err(ExistenceError("edge"));
-            }
-        } else {
-            return Err(ExistenceError("edge"));
-        }
-        Ok(())
     }
 }
 
@@ -225,28 +212,27 @@ mod test {
     #[test]
     fn connect_run_disconnect() {
         let mut g = Graph::new();
-        let n1 = Node::Input(IdentityNode::new("Input".to_string()));
+        let n1 = Node::Identity(IdentityNode::new("Input".to_string()));
         let n2 = Node::Psola(PsolaNode::new(1.0));
         let n1_id = n1.id();
         let n2_id = n2.id();
         g.add(n1);
         g.add(n2);
-        g.connect(&n1_id, &n2_id).unwrap();
-        assert_eq!(g.edges().get(&n1_id).unwrap()[0], n2_id);
+        let n1_out_id = g.add_output(&n1_id).unwrap();
+        let n2_in_id = g.add_input(&n2_id).unwrap();
+        g.connect_ports(&n1_out_id, &n2_in_id).unwrap();
+        assert_eq!(*g.edges().get(&n1_out_id).unwrap(), n2_in_id);
+        assert_eq!(*g.input_port_node_map.get(&n2_in_id).unwrap(), n2_id);
         match &*g.node(&n1_id).unwrap().lock().unwrap() {
-            Node::Input(ref n) => assert_eq!(n.outputs().len(), 1),
+            Node::Identity(ref n) => assert_eq!(n.outputs().len(), 1),
             _ => panic!(),
         };
         match &*g.node(&n2_id).unwrap().lock().unwrap() {
-            Node::Psola(ref n) => assert!(n.input().is_some()),
+            Node::Psola(ref n) => assert_eq!(n.inputs().len(), 1),
             _ => panic!(),
         };
         g.run_once().unwrap();
-        g.disconnect(&n1_id, &n2_id).unwrap();
-        assert_eq!(g.edges().get(&n1_id).unwrap().len(), 0);
-        match &*g.node(&n2_id).unwrap().lock().unwrap() {
-            Node::Psola(ref n) => assert!(n.input().is_none()),
-            _ => panic!(),
-        };
+        g.disconnect_ports(&n1_out_id, &n2_in_id).unwrap();
+        assert_eq!(g.edges().get(&n1_out_id), None);
     }
 }
