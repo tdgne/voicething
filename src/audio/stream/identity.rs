@@ -63,7 +63,7 @@ impl NodeTrait for IdentityNode {
         }
         if let Some(chunk) = self.inputs[0].try_recv().ok() {
             for output in self.outputs().iter() {
-                let _ = output.try_send(chunk.clone());
+                let result = output.try_send(chunk.clone());
             }
         }
     }

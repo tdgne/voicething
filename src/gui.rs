@@ -1,15 +1,16 @@
 use imgui::*;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel, sync_channel, Receiver, SyncSender};
-use std::thread;
 use serde_json;
+use std::sync::mpsc::{channel, sync_channel, Receiver, SyncSender};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 mod stream;
 mod support;
 use crate::audio;
-use crate::audio::rechunker::Rechunker;
-use crate::audio::stream::*;
 use crate::audio::common::*;
+use crate::audio::rechunker::Rechunker;
+use crate::audio::stream::node::NodeTrait;
+use crate::audio::stream::*;
 use stream::*;
 
 pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSender<SampleChunk>) {
@@ -25,7 +26,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
     });
 
     let mut g = Graph::new();
-    // let mut node_editor_state = NodeEditorState::new();
+    let mut node_editor_state = NodeEditorState::new();
 
     let (input_monitor_tx, input_monitor_rx) = sync_channel(16);
     let mut input_node = IdentityNode::new("Input".to_string());
@@ -39,12 +40,12 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
         output_port.tx = Some(input_monitor_tx);
     }
     g.add(Node::Identity(input_node));
-    // node_editor_state.set_pos(input_node_id, [20.0, 20.0]);
+    node_editor_state.set_node_pos(input_node_id, [20.0, 20.0]);
 
     let psola_node = PsolaNode::new(1.0);
     let psola_node_id = psola_node.id();
     g.add(Node::Psola(psola_node));
-    // node_editor_state.set_pos(psola_node_id, [20.0, 60.0]);
+    node_editor_state.set_node_pos(psola_node_id, [20.0, 60.0]);
 
     let (output_monitor_tx, output_monitor_rx) = sync_channel(16);
     let mut output_node = IdentityNode::new("Output".to_string());
@@ -58,7 +59,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
         output_port.tx = Some(output);
     }
     g.add(Node::Identity(output_node));
-    // node_editor_state.set_pos(output_node_id, [20.0, 100.0]);
+    node_editor_state.set_node_pos(output_node_id, [20.0, 100.0]);
 
     {
         let p1 = g.add_output(&input_node_id).unwrap();
@@ -121,6 +122,15 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                         }
                     });
                     ui.menu(im_str!("Nodes"), true, || {
+                        if MenuItem::new(im_str!("TD-PSOLA")).build(&ui) {
+                            let mut node = Node::Psola(PsolaNode::new(1.0));
+                            let node_id = node.id();
+                            let mut g = g.lock().unwrap();
+                            g.add(node);
+                            g.add_input(&node_id);
+                            g.add_output(&node_id);
+                            node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                        }
                         /*
                         if MenuItem::new(im_str!("Windower")).build(&ui) {
                             g.lock().unwrap().add(Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64)));
@@ -155,7 +165,6 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                         .graph_size([300.0, 100.0])
                         .build();
                 });
-            /*
             Window::new(im_str!("Nodes"))
                 .position([400.0, 20.0], Condition::FirstUseEver)
                 .size([600.0, 600.0], Condition::FirstUseEver)
@@ -165,48 +174,51 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                         for (_, node) in g.lock().unwrap().nodes().iter() {
                             match &mut *node.lock().unwrap() {
                                 Node::Psola(node) => {
-                                    connection_request = connection_request
-                                        .or(node.render_node(&ui, &mut node_editor_state));
+                                    node.render(&ui, &mut node_editor_state);
                                 }
-                                Node::Input(node) => {
-                                    connection_request = connection_request
-                                        .or(node.render_node(&ui, &mut node_editor_state));
-                                }
-                                Node::Output(node) => {
-                                    connection_request = connection_request
-                                        .or(node.render_node(&ui, &mut node_editor_state));
-                                }
-                                Node::Windower(node) => {
-                                    connection_request = connection_request
-                                        .or(node.render_node(&ui, &mut node_editor_state));
-                                }
-                                Node::Dewindower(node) => {
-                                    connection_request = connection_request
-                                        .or(node.render_node(&ui, &mut node_editor_state));
-                                }
+                                Node::Identity(node) => {
+                                    node.render(&ui, &mut node_editor_state);
+                                } /*
+                                  Node::Windower(node) => {
+                                      connection_request = connection_request
+                                          .or(node.render_node(&ui, &mut node_editor_state));
+                                  }
+                                  Node::Dewindower(node) => {
+                                      connection_request = connection_request
+                                          .or(node.render_node(&ui, &mut node_editor_state));
+                                  }
+                                  */
+                            }
+                            for inputs in node.lock().unwrap().inputs().iter() {
+                                connection_request = connection_request
+                                    .or(inputs.render(&ui, &mut node_editor_state));
+                            }
+                            for outputs in node.lock().unwrap().outputs().iter() {
+                                connection_request = connection_request
+                                    .or(outputs.render(&ui, &mut node_editor_state));
                             }
                         }
                     }
                     if let Some(request) = connection_request {
-                        let _ = g.lock().unwrap().connect(&request.0, &request.1);
+                        let mut g = g.lock().unwrap();
+                        if g.is_output_port(&request.0) && g.is_input_port(&request.1) {
+                            let _ = g.connect_ports(&request.0, &request.1);
+                        }
                     }
                     let draw_list = ui.get_window_draw_list();
                     ui.set_cursor_pos([0.0, 0.0]);
                     let win_pos = ui.cursor_screen_pos();
-                    for (start, ends) in g.lock().unwrap().edges().iter() {
-                        let start_pos = node_editor_state.pos(start).unwrap();
+                    for (start, end) in g.lock().unwrap().edges().iter() {
+                        let start_pos = node_editor_state.output_pos(start).unwrap();
                         let start_pos = [start_pos[0] + win_pos[0], start_pos[1] + win_pos[1]];
-                        for end in ends {
-                            let end_pos = node_editor_state.pos(end).unwrap();
-                            let end_pos = [end_pos[0] + win_pos[0], end_pos[1] + win_pos[1]];
-                            draw_list
-                                .add_line(start_pos.clone(), end_pos.clone(), (0.5, 0.5, 0.5, 0.5))
-                                .thickness(2.0)
-                                .build();
-                        }
+                        let end_pos = node_editor_state.input_pos(end).unwrap();
+                        let end_pos = [end_pos[0] + win_pos[0], end_pos[1] + win_pos[1]];
+                        draw_list
+                            .add_line(start_pos.clone(), end_pos.clone(), (0.5, 0.5, 0.5, 0.5))
+                            .thickness(2.0)
+                            .build();
                     }
                 });
-            */
         });
     }
 }

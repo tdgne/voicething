@@ -58,6 +58,14 @@ impl Graph {
         }
     }
 
+    pub fn is_input_port(&self, id: &Uuid) -> bool {
+        self.input_port_node_map.get(id).is_some()
+    }
+
+    pub fn is_output_port(&self, id: &Uuid) -> bool {
+        self.output_port_node_map.get(id).is_some()
+    }
+
     pub fn add_input(&mut self, node_id: &Uuid) -> Result<Uuid, Box<dyn Error>> {
         let node = self.node(node_id)?;
         let id = node.lock().unwrap().add_input().unwrap().id().clone();
@@ -157,7 +165,7 @@ impl Graph {
             }
         }
         for port in to_node.lock().unwrap().inputs_mut().iter_mut() {
-            if port.id() == *from_id {
+            if port.id() == *to_id {
                 port.rx = Some(rx);
                 port.output_id = Some(*from_id);
                 break;
@@ -199,7 +207,11 @@ impl Graph {
             }
         }
         if let Some(other_id) = other_id {
-            self.disconnect_ports(id, &other_id)
+            if self.input_port_node_map.get(id).is_some() {
+                self.disconnect_ports(&other_id, id)
+            } else {
+                self.disconnect_ports(id, &other_id)
+            }
         } else {
             Ok(())
         }

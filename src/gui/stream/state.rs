@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use uuid::Uuid;
-use crate::audio::stream::{SingleInput, Node};
-use crate::audio::node::{sync_chunk_channel, HasId};
-use std::sync::{Arc, Mutex};
+use crate::audio::stream::node::NodeTrait;
 use imgui::*;
 
 pub type ConnectRequest = (Uuid, Uuid);
 
 pub struct NodeEditorState {
     node_pos: HashMap<Uuid, [f32; 2]>,
+    input_pos: HashMap<Uuid, [f32; 2]>,
+    output_pos: HashMap<Uuid, [f32; 2]>,
     left_dragged: Option<Uuid>,
     right_dragged: Option<Uuid>,
     focused: Option<Uuid>,
@@ -18,21 +18,39 @@ impl NodeEditorState {
     pub fn new() -> Self {
         Self {
             node_pos: HashMap::new(),
+            input_pos: HashMap::new(),
+            output_pos: HashMap::new(),
             left_dragged: None,
             right_dragged: None,
             focused: None,
         }
     }
 
-    pub fn set_pos(&mut self, uuid: Uuid, pos: [f32; 2]) {
+    pub fn set_node_pos(&mut self, uuid: Uuid, pos: [f32; 2]) {
         self.node_pos.insert(uuid, pos);
     }
 
-    pub fn pos(&self, uuid: &Uuid) -> Option<&[f32; 2]> {
+    pub fn set_input_pos(&mut self, uuid: Uuid, pos: [f32; 2]) {
+        self.input_pos.insert(uuid, pos);
+    }
+
+    pub fn set_output_pos(&mut self, uuid: Uuid, pos: [f32; 2]) {
+        self.output_pos.insert(uuid, pos);
+    }
+
+    pub fn node_pos(&self, uuid: &Uuid) -> Option<&[f32; 2]> {
         self.node_pos.get(uuid)
     }
 
-    pub fn pos_mut(&mut self, uuid: &Uuid) -> Option<&mut [f32; 2]> {
+    pub fn input_pos(&self, uuid: &Uuid) -> Option<&[f32; 2]> {
+        self.input_pos.get(uuid)
+    }
+
+    pub fn output_pos(&self, uuid: &Uuid) -> Option<&[f32; 2]> {
+        self.output_pos.get(uuid)
+    }
+
+    pub fn node_pos_mut(&mut self, uuid: &Uuid) -> Option<&mut [f32; 2]> {
         self.node_pos.get_mut(uuid)
     }
 
@@ -61,10 +79,10 @@ impl NodeEditorState {
     }
 }
 
-pub trait InputHandler: HasId {
-    fn handle_input(&mut self, ui: &Ui, state: &mut NodeEditorState, size: [f32; 2]) -> (bool, Option<ConnectRequest>) {
+pub trait InputHandler: NodeTrait {
+    fn handle_input(&mut self, ui: &Ui, state: &mut NodeEditorState, size: [f32; 2]) -> bool {
         let win_pos = ui.cursor_screen_pos();
-        let pos = state.pos(&self.id()).unwrap();
+        let pos = state.node_pos(&self.id()).unwrap();
         let screen_pos = [pos[0] + win_pos[0], pos[1] + win_pos[1]];
         ui.set_cursor_screen_pos(screen_pos);
         let clicked = ui.invisible_button(&im_str!("{}", self.id()), size);
@@ -86,28 +104,9 @@ pub trait InputHandler: HasId {
                     mouse_pos[0] - win_pos[0] - size[0] / 2.0,
                     mouse_pos[1] - win_pos[1] - size[1] / 2.0,
                 ];
-                state.set_pos(self.id(), pos);
+                state.set_node_pos(self.id(), pos);
             }
         }
-
-        // right drag
-        let this_right_dragged = state.right_dragged() == Some(self.id());
-        let mut connection_request = None;
-        {
-            let dragging = ui.is_mouse_dragging_with_threshold(MouseButton::Right, 2.0);
-            if dragging && hovered && state.right_dragged().is_none() {
-                state.set_right_dragged(Some(self.id()));
-            }
-            if !dragging {
-                if let Some(start_node_id) = state.right_dragged() {
-                    if hovered {
-                        let end_node_id = self.id();
-                        connection_request = Some((start_node_id, end_node_id));
-                        state.set_right_dragged(None);
-                    }
-                }
-            }
-        };
 
         let truly_clicked = clicked && !this_left_dragged;
         if truly_clicked {
@@ -116,6 +115,6 @@ pub trait InputHandler: HasId {
 
         let focused = state.focused() == Some(self.id());
 
-        (focused, connection_request)
+        focused
     }
 }

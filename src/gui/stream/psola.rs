@@ -1,15 +1,14 @@
 use super::*;
-use crate::audio::stream::node::HasId;
-use crate::audio::stream::psola::PsolaNode;
+use crate::audio::stream::{node::NodeTrait, psola::PsolaNode};
 use imgui::*;
 
 impl InputHandler for PsolaNode {}
 
 impl PsolaNode {
-    pub fn render_node(&mut self, ui: &Ui, state: &mut NodeEditorState) -> Option<ConnectRequest> {
+    pub fn render(&mut self, ui: &Ui, state: &mut NodeEditorState) {
         ui.set_cursor_pos([0.0, 0.0]);
         let win_pos = ui.cursor_screen_pos();
-        let pos = state.pos(&self.id()).unwrap();
+        let pos = state.node_pos(&self.id()).unwrap().clone();
         let (w, h) = (100.0, 20.0);
         {
             let draw_list = ui.get_window_draw_list();
@@ -22,13 +21,16 @@ impl PsolaNode {
             draw_list.add_text(pos, (0.0, 0.0, 0.0, 1.0), "TD-PSOLA");
         }
 
-        let (focused, connection_request) = self.handle_input(ui, state, [w, h]);
+        state.set_input_pos(self.inputs()[0].id(), [pos[0], pos[1] - 5.0]);
+        for (i, output) in self.outputs().iter().enumerate() {
+            state.set_output_pos(output.id(), [pos[0] + 10.0 * i as f32, pos[1] + h]);
+        }
+
+        let focused = self.handle_input(ui, state, [w, h]);
 
         if focused {
             self.render_control_window(ui);
         }
-
-        connection_request
     }
 
     pub fn render_control_window(&mut self, ui: &Ui) {
