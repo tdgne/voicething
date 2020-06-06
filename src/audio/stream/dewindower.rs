@@ -3,36 +3,30 @@ use super::node::*;
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use uuid::Uuid;
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
-pub struct Dewindower<S: Sample> {
+pub struct Dewindower {
+    inputs: Vec<InputPort>,
+    outputs: Vec<OutputPort>,
+    id: NodeId,
     #[serde(skip)]
-    input: Option<ChunkReceiver<S>>,
-    #[serde(skip)]
-    outputs: Vec<SyncChunkSender<S>>,
-    #[serde(skip)]
-    id: Uuid,
-    #[serde(skip)]
-    buffer: Vec<VecDeque<S>>,
+    buffer: Vec<VecDeque<f32>>,
     out_chunk_size: usize,
 }
 
-impl<S: Sample> HasId for Dewindower<S> {
-    fn id(&self) -> Uuid {
-        self.id
-    }
-}
-
-impl<S: Sample> Dewindower<S> {
+impl Dewindower {
     pub fn new(out_chunk_size: usize) -> Self {
         Self {
-            input: None,
+            inputs: vec![],
             outputs: vec![],
-            id: Uuid::new_v4(),
+            id: NodeId::new(),
             buffer: vec![],
             out_chunk_size,
         }
+    }
+
+    fn id(&self) -> NodeId {
+        self.id
     }
 
     fn triangular_window(x: usize, length: usize) -> f32 {
@@ -45,7 +39,11 @@ impl<S: Sample> Dewindower<S> {
         0.5 - 0.5 * (2.0 * 3.141592 * x).cos()
     }
 
-    fn process_chunk_mul(&mut self, chunk: SampleChunk<S>) -> Vec<SampleChunk<S>> {
+    pub fn process_chunk(&mut self, chunk: SampleChunk) -> Vec<SampleChunk> {
+        let chunk = match chunk {
+            SampleChunk::Real(chunk) => chunk,
+            _ => panic!("incompatible input"),
+        };
         let delay = *chunk.window_info().clone().unwrap().delay();
         for c in 0..*chunk.metadata().channels() {
             if self.buffer.len() <= c {
@@ -60,8 +58,8 @@ impl<S: Sample> Dewindower<S> {
         }
         let mut dewindowed_chunks = vec![];
         while self.buffer[0].len() >= self.out_chunk_size {
-            let mut dewindowed_chunk: SampleChunk<S> = SampleChunk::from_flat_samples(
-                &vec![S::from_f32(0.0).unwrap(); self.buffer.len() * self.out_chunk_size],
+            let mut dewindowed_chunk = GenericSampleChunk::from_flat_samples(
+                &vec![0.0; self.buffer.len() * self.out_chunk_size],
                 chunk.metadata().clone(),
             )
             .unwrap();
@@ -78,39 +76,49 @@ impl<S: Sample> Dewindower<S> {
             }
             dewindowed_chunks.push(dewindowed_chunk);
         }
-        dewindowed_chunks
+        dewindowed_chunks.iter().map(|c| SampleChunk::Real(c.clone())).collect::<Vec<_>>()
     }
 }
 
-impl<S: Sample> SingleInput<S, S> for Dewindower<S> {
-    fn input(&self) -> Option<&ChunkReceiver<S>> {
-        self.input.as_ref()
-    }
 
-    fn outputs(&self) -> &[SyncChunkSender<S>] {
-        self.outputs.as_ref()
+impl NodeTrait for Dewindower {
+    fn id(&self) -> NodeId {
+        self.id
     }
-
-    fn set_input(&mut self, rx: Option<ChunkReceiver<S>>) {
-        self.input = rx;
+    fn inputs(&self) -> &[InputPort] {
+        &self.inputs
     }
-
-    fn add_output(&mut self, tx: SyncChunkSender<S>) {
-        self.outputs.push(tx);
+    fn outputs(&self) -> &[OutputPort] {
+        &self.outputs
     }
-
-    fn process_chunk(&mut self, chunk: SampleChunk<S>) -> SampleChunk<S> {
-        panic!("this should never be used")
+    fn inputs_mut(&mut self) -> &mut [InputPort] {
+        &mut self.inputs
     }
-
+    fn outputs_mut(&mut self) -> &mut [OutputPort] {
+        &mut self.outputs
+    }
+    fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {
+        if self.inputs.len() == 0 {
+            self.inputs.push(InputPort::new(self.id));
+            Ok(&mut self.inputs[0])
+        } else {
+            Err(Box::new(PortAdditionError))
+        }
+    }
+    fn add_output(&mut self) -> Result<&mut OutputPort, Box<dyn std::error::Error>> {
+        self.outputs.push(OutputPort::new(self.id));
+        let l = self.outputs.len();
+        Ok(&mut self.outputs[l - 1])
+    }
     fn run_once(&mut self) {
-        if let Some(input) = self.input() {
-            if let Some(chunk) = input.try_recv().ok() {
-                let chunks = self.process_chunk_mul(chunk);
-                for output in self.outputs().iter() {
-                    for chunk in chunks.iter() {
-                        let _ = output.try_send(chunk.clone());
-                    }
+        if self.inputs.len() != 1 {
+            return;
+        }
+        if let Some(chunk) = self.inputs[0].try_recv().ok() {
+            let chunks = self.process_chunk(chunk);
+            for output in self.outputs().iter() {
+                for chunk in chunks.iter() {
+                    let _ = output.try_send(chunk.clone());
                 }
             }
         }

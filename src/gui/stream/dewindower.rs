@@ -1,17 +1,16 @@
-use crate::audio::common::Sample;
+use crate::audio::stream::node::NodeTrait;
 use crate::audio::stream::dewindower::Dewindower;
-use crate::audio::node::HasId;
 use super::NodeEditorState;
 use imgui::*;
 use super::*;
 
-impl<S: Sample> InputHandler for Dewindower<S> {}
+impl InputHandler for Dewindower {}
 
-impl<S: Sample> Dewindower<S> {
-    pub fn render_node(&mut self, ui: &Ui, state: &mut NodeEditorState) -> Option<ConnectRequest> {
+impl Dewindower {
+    pub fn render(&mut self, ui: &Ui, state: &mut NodeEditorState) {
         ui.set_cursor_pos([0.0, 0.0]);
         let win_pos = ui.cursor_screen_pos();
-        let pos = state.pos(&self.id()).unwrap();
+        let pos = state.node_pos(&self.id()).unwrap();
         let (w, h) = (100.0, 20.0);
         {
             let draw_list = ui.get_window_draw_list();
@@ -24,7 +23,7 @@ impl<S: Sample> Dewindower<S> {
             draw_list.add_text(pos, (0.0, 0.0, 0.0, 1.0), "Dewindower");
         }
 
-        self.handle_input(ui, state, [w, h]).1
+        self.handle_input(ui, state, [w, h]);
     }
 
     pub fn render_control_window(&mut self, ui: &Ui) {

@@ -32,6 +32,8 @@ pub trait NodeTrait {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Node {
     Psola(PsolaNode),
+    Windower(Windower),
+    Dewindower(Dewindower),
     Identity(IdentityNode),
 }
 

@@ -121,25 +121,36 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                             }
                         }
                     });
-                    ui.menu(im_str!("Nodes"), true, || {
-                        if MenuItem::new(im_str!("TD-PSOLA")).build(&ui) {
-                            let mut node = Node::Psola(PsolaNode::new(1.0));
-                            let node_id = node.id();
-                            let mut g = g.lock().unwrap();
-                            g.add(node);
-                            g.add_input(&node_id);
-                            g.add_output(&node_id);
-                            node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
-                        }
-                        /*
-                        if MenuItem::new(im_str!("Windower")).build(&ui) {
-                            g.lock().unwrap().add(Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64)));
-                        }
-                        if MenuItem::new(im_str!("Dewindower")).build(&ui) {
-                            g.lock().unwrap().add(Node::Dewindower(Dewindower::new(1024)));
-                        }
-                        */
-                    });
+                });
+                ui.menu(im_str!("Nodes"), true, || {
+                    if MenuItem::new(im_str!("TD-PSOLA")).build(&ui) {
+                        let mut node = Node::Psola(PsolaNode::new(1.0));
+                        let node_id = node.id();
+                        let mut g = g.lock().unwrap();
+                        g.add(node);
+                        g.add_input(&node_id);
+                        g.add_output(&node_id);
+                        node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                    }
+                    if MenuItem::new(im_str!("Windower")).build(&ui) {
+                        let mut node =
+                            Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64));
+                        let node_id = node.id();
+                        let mut g = g.lock().unwrap();
+                        g.add(node);
+                        g.add_input(&node_id);
+                        g.add_output(&node_id);
+                        node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                    }
+                    if MenuItem::new(im_str!("Dewindower")).build(&ui) {
+                        let mut node = Node::Dewindower(Dewindower::new(1024));
+                        let node_id = node.id();
+                        let mut g = g.lock().unwrap();
+                        g.add(node);
+                        g.add_input(&node_id);
+                        g.add_output(&node_id);
+                        node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                    }
                 });
             });
             Window::new(im_str!("I/O Monitor"))
@@ -178,16 +189,13 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                                 }
                                 Node::Identity(node) => {
                                     node.render(&ui, &mut node_editor_state);
-                                } /*
-                                  Node::Windower(node) => {
-                                      connection_request = connection_request
-                                          .or(node.render_node(&ui, &mut node_editor_state));
-                                  }
-                                  Node::Dewindower(node) => {
-                                      connection_request = connection_request
-                                          .or(node.render_node(&ui, &mut node_editor_state));
-                                  }
-                                  */
+                                }
+                                Node::Windower(node) => {
+                                    node.render(&ui, &mut node_editor_state);
+                                }
+                                Node::Dewindower(node) => {
+                                    node.render(&ui, &mut node_editor_state);
+                                }
                             }
                             for inputs in node.lock().unwrap().inputs().iter() {
                                 connection_request = connection_request

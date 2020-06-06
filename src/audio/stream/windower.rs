@@ -3,40 +3,34 @@ use super::node::*;
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use uuid::Uuid;
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
-pub struct Windower<S: Sample> {
+pub struct Windower {
+    inputs: Vec<InputPort>,
+    outputs: Vec<OutputPort>,
+    id: NodeId,
     #[serde(skip)]
-    input: Option<ChunkReceiver<S>>,
-    #[serde(skip)]
-    outputs: Vec<SyncChunkSender<S>>,
-    #[serde(skip)]
-    id: Uuid,
-    #[serde(skip)]
-    buffer: Vec<VecDeque<S>>,
+    buffer: Vec<VecDeque<f32>>,
     window_function: WindowFunction,
     window_size: usize,
     delay: usize,
 }
 
-impl<S: Sample> HasId for Windower<S> {
-    fn id(&self) -> Uuid {
-        self.id
-    }
-}
-
-impl<S: Sample> Windower<S> {
+impl Windower {
     pub fn new(window_function: WindowFunction, window_size: usize, delay: usize) -> Self {
         Self {
-            input: None,
+            inputs: vec![],
             outputs: vec![],
-            id: Uuid::new_v4(),
+            id: NodeId::new(),
             window_function,
             window_size,
             delay,
             buffer: vec![],
         }
+    }
+
+    fn id(&self) -> NodeId {
+        self.id
     }
 
     fn triangular_window(x: usize, length: usize) -> f32 {
@@ -49,7 +43,11 @@ impl<S: Sample> Windower<S> {
         0.5 - 0.5 * (2.0 * 3.141592 * x).cos()
     }
 
-    fn process_chunk_mul(&mut self, chunk: SampleChunk<S>) -> Vec<SampleChunk<S>> {
+    pub fn process_chunk(&mut self, chunk: SampleChunk) -> Vec<SampleChunk> {
+        let chunk = match chunk {
+            SampleChunk::Real(chunk) => chunk,
+            _ => panic!("incompatible input"),
+        };
         for c in 0..*chunk.metadata().channels() {
             if self.buffer.len() <= c {
                 self.buffer.push(vec![].into());
@@ -60,8 +58,8 @@ impl<S: Sample> Windower<S> {
         }
         let mut windowed_chunks = vec![];
         while self.buffer[0].len() >= self.window_size {
-            let mut windowed_chunk: SampleChunk<S> = SampleChunk::from_flat_samples(
-                &vec![S::from_f32(0.0).unwrap(); self.buffer.len() * self.window_size],
+            let mut windowed_chunk = GenericSampleChunk::from_flat_samples(
+                &vec![0.0; self.buffer.len() * self.window_size],
                 chunk.metadata().clone(),
             )
             .unwrap();
@@ -70,9 +68,9 @@ impl<S: Sample> Windower<S> {
                 let samples = windowed_chunk.samples_mut(c);
                 for (i, s) in b.iter().take(self.window_size).enumerate() {
                     samples[i] = *s * match self.window_function {
-                        WindowFunction::Rectangular => S::from_f32(1.0f32).unwrap(),
-                        WindowFunction::Hanning => S::from_f32(Self::hanning_window(i, self.window_size)).unwrap(),
-                        WindowFunction::Triangular => S::from_f32(Self::triangular_window(i, self.window_size)).unwrap(),
+                        WindowFunction::Rectangular => 1.0,
+                        WindowFunction::Hanning => Self::hanning_window(i, self.window_size),
+                        WindowFunction::Triangular => Self::triangular_window(i, self.window_size),
                     };
                 }
             }
@@ -83,39 +81,48 @@ impl<S: Sample> Windower<S> {
             }
             windowed_chunks.push(windowed_chunk);
         }
-        windowed_chunks
+        windowed_chunks.iter().map(|c| SampleChunk::Real(c.clone())).collect::<Vec<_>>()
     }
 }
 
-impl<S: Sample> SingleInput<S, S> for Windower<S> {
-    fn input(&self) -> Option<&ChunkReceiver<S>> {
-        self.input.as_ref()
+impl NodeTrait for Windower {
+    fn id(&self) -> NodeId {
+        self.id
     }
-
-    fn outputs(&self) -> &[SyncChunkSender<S>] {
-        self.outputs.as_ref()
+    fn inputs(&self) -> &[InputPort] {
+        &self.inputs
     }
-
-    fn set_input(&mut self, rx: Option<ChunkReceiver<S>>) {
-        self.input = rx;
+    fn outputs(&self) -> &[OutputPort] {
+        &self.outputs
     }
-
-    fn add_output(&mut self, tx: SyncChunkSender<S>) {
-        self.outputs.push(tx);
+    fn inputs_mut(&mut self) -> &mut [InputPort] {
+        &mut self.inputs
     }
-
-    fn process_chunk(&mut self, chunk: SampleChunk<S>) -> SampleChunk<S> {
-        panic!("this should never be used")
+    fn outputs_mut(&mut self) -> &mut [OutputPort] {
+        &mut self.outputs
     }
-
+    fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {
+        if self.inputs.len() == 0 {
+            self.inputs.push(InputPort::new(self.id));
+            Ok(&mut self.inputs[0])
+        } else {
+            Err(Box::new(PortAdditionError))
+        }
+    }
+    fn add_output(&mut self) -> Result<&mut OutputPort, Box<dyn std::error::Error>> {
+        self.outputs.push(OutputPort::new(self.id));
+        let l = self.outputs.len();
+        Ok(&mut self.outputs[l - 1])
+    }
     fn run_once(&mut self) {
-        if let Some(input) = self.input() {
-            if let Some(chunk) = input.try_recv().ok() {
-                let chunks = self.process_chunk_mul(chunk);
-                for output in self.outputs().iter() {
-                    for chunk in chunks.iter() {
-                        let _ = output.try_send(chunk.clone());
-                    }
+        if self.inputs.len() != 1 {
+            return;
+        }
+        if let Some(chunk) = self.inputs[0].try_recv().ok() {
+            let chunks = self.process_chunk(chunk);
+            for output in self.outputs().iter() {
+                for chunk in chunks.iter() {
+                    let _ = output.try_send(chunk.clone());
                 }
             }
         }
@@ -127,15 +134,23 @@ mod test {
     use crate::audio::*;
     #[test]
     fn window_dewindow() {
-        let c = SampleChunk::from_flat_samples(&vec![1.0; 1024*4], AudioMetadata::new(2, 44100)).unwrap();
+        let c = SampleChunk::Real(GenericSampleChunk::from_flat_samples(&vec![1.0; 1024*4], AudioMetadata::new(2, 44100)).unwrap());
         let mut w = Windower::new(WindowFunction::Hanning, 300, 128);
         let mut dw = Dewindower::new(821);
         for n in w.process_chunk(c).into_iter() {
-            assert_eq!(*n.duration_samples(), 300);
-            assert_ne!(n.samples(0)[1], 0.0);
+            let nc = match n.clone() {
+                SampleChunk::Real(n) => n,
+                _ => panic!(),
+            };
+            assert_eq!(*nc.duration_samples(), 300);
+            assert_ne!(nc.samples(0)[1], 0.0);
             for n in dw.process_chunk(n).iter() {
-                assert_eq!(*n.duration_samples(), 821);
-                assert_ne!(n.samples(0)[1], 0.0);
+                let nc = match n {
+                    SampleChunk::Real(n) => n,
+                    _ => panic!(),
+                };
+                assert_eq!(*nc.duration_samples(), 821);
+                assert_ne!(nc.samples(0)[1], 0.0);
             }
         }
     }
