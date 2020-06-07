@@ -16,19 +16,80 @@ impl NodeId {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NodeIo {
+    inputs: Vec<InputPort>,
+    outputs: Vec<OutputPort>,
+}
+
+impl NodeIo {
+    pub fn new() -> Self {
+        Self {
+            inputs: vec![],
+            outputs: vec![],
+        }
+    }
+    pub fn inputs(&self) -> &[InputPort] {
+        &self.inputs
+    }
+    pub fn outputs(&self) -> &[OutputPort] {
+        &self.outputs
+    }
+    pub fn inputs_mut(&mut self) -> &mut [InputPort] {
+        &mut self.inputs
+    }
+    pub fn outputs_mut(&mut self) -> &mut [OutputPort] {
+        &mut self.outputs
+    }
+    pub fn inputs_vec_mut(&mut self) -> &mut Vec<InputPort> {
+        &mut self.inputs
+    }
+    pub fn outputs_vec_mut(&mut self) -> &mut Vec<OutputPort> {
+        &mut self.outputs
+    }
+}
+
 #[enum_dispatch]
-pub trait NodeTrait {
+pub trait HasNodeIo {
+    fn node_io(&self) -> &NodeIo;
+    fn node_io_mut(&mut self) -> &mut NodeIo;
+}
+
+#[enum_dispatch]
+pub trait NodeTrait: HasNodeIo {
     fn id(&self) -> NodeId;
-    fn inputs(&self) -> &[InputPort];
-    fn outputs(&self) -> &[OutputPort];
-    fn inputs_mut(&mut self) -> &mut [InputPort];
-    fn outputs_mut(&mut self) -> &mut [OutputPort];
-    fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>>;
-    fn add_output(&mut self) -> Result<&mut OutputPort, Box<dyn std::error::Error>>;
+    fn inputs(&self) -> &[InputPort] {
+        self.node_io().inputs()
+    }
+    fn outputs(&self) -> &[OutputPort] {
+        self.node_io().outputs()
+    }
+    fn inputs_mut(&mut self) -> &mut [InputPort] {
+        self.node_io_mut().inputs_mut()
+    }
+    fn outputs_mut(&mut self) -> &mut [OutputPort] {
+        self.node_io_mut().outputs_mut()
+    }
+    fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {
+        if self.inputs().len() == 0 {
+            let id = self.id();
+            self.node_io_mut().inputs_vec_mut().push(InputPort::new(id));
+            Ok(&mut self.inputs_mut()[0])
+        } else {
+            Err(Box::new(PortAdditionError))
+        }
+    }
+    fn add_output(&mut self) -> Result<&mut OutputPort, Box<dyn std::error::Error>> {
+        let id = self.id();
+        self.node_io_mut().outputs_vec_mut().push(OutputPort::new(id));
+        let l = self.outputs().len();
+        Ok(&mut self.outputs_mut()[l - 1])
+    }
     fn run_once(&mut self);
 }
 
 #[enum_dispatch(NodeTrait)]
+#[enum_dispatch(HasNodeIo)]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Node {
     Psola(PsolaNode),

@@ -6,8 +6,7 @@ use std::collections::VecDeque;
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
 pub struct Windower {
-    inputs: Vec<InputPort>,
-    outputs: Vec<OutputPort>,
+    io: NodeIo,
     id: NodeId,
     #[serde(skip)]
     buffer: Vec<VecDeque<f32>>,
@@ -16,11 +15,20 @@ pub struct Windower {
     delay: usize,
 }
 
+impl HasNodeIo for Windower {
+    fn node_io(&self) -> &NodeIo {
+        &self.io
+    }
+    fn node_io_mut(&mut self) -> &mut NodeIo {
+        &mut self.io
+    }
+}
+
+
 impl Windower {
     pub fn new(window_function: WindowFunction, window_size: usize, delay: usize) -> Self {
         Self {
-            inputs: vec![],
-            outputs: vec![],
+            io: NodeIo::new(),
             id: NodeId::new(),
             window_function,
             window_size,
@@ -98,36 +106,11 @@ impl NodeTrait for Windower {
     fn id(&self) -> NodeId {
         self.id
     }
-    fn inputs(&self) -> &[InputPort] {
-        &self.inputs
-    }
-    fn outputs(&self) -> &[OutputPort] {
-        &self.outputs
-    }
-    fn inputs_mut(&mut self) -> &mut [InputPort] {
-        &mut self.inputs
-    }
-    fn outputs_mut(&mut self) -> &mut [OutputPort] {
-        &mut self.outputs
-    }
-    fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {
-        if self.inputs.len() == 0 {
-            self.inputs.push(InputPort::new(self.id));
-            Ok(&mut self.inputs[0])
-        } else {
-            Err(Box::new(PortAdditionError))
-        }
-    }
-    fn add_output(&mut self) -> Result<&mut OutputPort, Box<dyn std::error::Error>> {
-        self.outputs.push(OutputPort::new(self.id));
-        let l = self.outputs.len();
-        Ok(&mut self.outputs[l - 1])
-    }
     fn run_once(&mut self) {
-        if self.inputs.len() != 1 {
+        if self.inputs().len() != 1 {
             return;
         }
-        if let Some(chunk) = self.inputs[0].try_recv().ok() {
+        if let Some(chunk) = self.inputs()[0].try_recv().ok() {
             let chunks = self.process_chunk(chunk);
             for output in self.outputs().iter() {
                 for chunk in chunks.iter() {
