@@ -113,6 +113,20 @@ impl SampleChunk {
             Self::Complex(c) => c.metadata(),
         }
     }
+
+    pub fn duration_samples(&self) -> &usize {
+        match self {
+            Self::Real(c) => c.duration_samples(),
+            Self::Complex(c) => c.duration_samples(),
+        }
+    }
+
+    pub fn window_info(&self) -> &Option<WindowInfo> {
+        match self {
+            Self::Real(c) => c.window_info(),
+            Self::Complex(c) => c.window_info(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
