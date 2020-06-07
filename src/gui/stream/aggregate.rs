@@ -26,6 +26,14 @@ impl AggregateNode {
         }
 
         let mut i = 0;
+        for input in self.inputs().iter() {
+            if !(input.rx.is_some() && input.output_id.is_none()) {
+                state.set_input_pos(input.id(), [pos[0] + 10.0 * i as f32, pos[1] - 5.0]);
+                i += 1;
+            }
+        }
+
+        let mut i = 0;
         for output in self.outputs().iter() {
             if !(output.tx.is_some() && output.input_id.is_none()) {
                 state.set_output_pos(output.id(), [pos[0] + 10.0 * i as f32, pos[1] + h]);

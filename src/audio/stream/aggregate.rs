@@ -40,7 +40,7 @@ impl AggregateNode {
     }
 
     pub fn process_chunk(&mut self, chunks: Vec<SampleChunk>) -> Option<SampleChunk> {
-        if chunks.len() != self.inputs().len() || chunks.len() == 0 {
+        if chunks.len() == 0 {
             return None;
         }
         let is_real = chunks
@@ -104,9 +104,10 @@ impl NodeTrait for AggregateNode {
             .iter()
             .flat_map(|input| input.try_recv().ok())
             .collect::<Vec<_>>();
-        let chunk = self.process_chunk(chunks).unwrap();
-        for output in self.outputs().iter() {
-            let _ = output.try_send(chunk.clone());
+        if let Some(chunk) = self.process_chunk(chunks) {
+            for output in self.outputs().iter() {
+                let _ = output.try_send(chunk.clone());
+            }
         }
     }
     fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {
