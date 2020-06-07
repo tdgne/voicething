@@ -35,16 +35,10 @@ impl NodeIo {
     pub fn outputs(&self) -> &[OutputPort] {
         &self.outputs
     }
-    pub fn inputs_mut(&mut self) -> &mut [InputPort] {
+    pub fn inputs_mut(&mut self) -> &mut Vec<InputPort> {
         &mut self.inputs
     }
-    pub fn outputs_mut(&mut self) -> &mut [OutputPort] {
-        &mut self.outputs
-    }
-    pub fn inputs_vec_mut(&mut self) -> &mut Vec<InputPort> {
-        &mut self.inputs
-    }
-    pub fn outputs_vec_mut(&mut self) -> &mut Vec<OutputPort> {
+    pub fn outputs_mut(&mut self) -> &mut Vec<OutputPort> {
         &mut self.outputs
     }
 }
@@ -73,7 +67,7 @@ pub trait NodeTrait: HasNodeIo {
     fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {
         if self.inputs().len() == 0 {
             let id = self.id();
-            self.node_io_mut().inputs_vec_mut().push(InputPort::new(id));
+            self.node_io_mut().inputs_mut().push(InputPort::new(id));
             Ok(&mut self.inputs_mut()[0])
         } else {
             Err(Box::new(PortAdditionError))
@@ -81,7 +75,7 @@ pub trait NodeTrait: HasNodeIo {
     }
     fn add_output(&mut self) -> Result<&mut OutputPort, Box<dyn std::error::Error>> {
         let id = self.id();
-        self.node_io_mut().outputs_vec_mut().push(OutputPort::new(id));
+        self.node_io_mut().outputs_mut().push(OutputPort::new(id));
         let l = self.outputs().len();
         Ok(&mut self.outputs_mut()[l - 1])
     }

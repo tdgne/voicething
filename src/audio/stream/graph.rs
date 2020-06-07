@@ -67,14 +67,14 @@ impl Graph {
 
     pub fn add_input(&mut self, node_id: &NodeId) -> Result<InputPortId, Box<dyn Error>> {
         let node = self.node(node_id)?;
-        let id = node.lock().unwrap().add_input().unwrap().id().clone();
+        let id = node.lock().unwrap().add_input()?.id().clone();
         self.input_port_node_map.insert(id, *node_id);
         Ok(id)
     }
 
     pub fn add_output(&mut self, node_id: &NodeId) -> Result<OutputPortId, Box<dyn Error>> {
         let node = self.node(node_id)?;
-        let id = node.lock().unwrap().add_output().unwrap().id().clone();
+        let id = node.lock().unwrap().add_output()?.id().clone();
         self.output_port_node_map.insert(id, *node_id);
         Ok(id)
     }
@@ -153,8 +153,10 @@ impl Graph {
     pub fn connect_ports(&mut self, from_id: &OutputPortId, to_id: &InputPortId) -> Result<(), Box<dyn Error>> {
         self.detach_output_port(from_id);
         self.detach_input_port(to_id);
-        let from_node = self.node(self.output_port_node_map.get(from_id).unwrap())?;
-        let to_node = self.node(self.input_port_node_map.get(to_id).unwrap())?;
+        let from_node_id = self.output_port_node_map.get(from_id).unwrap().clone();
+        let to_node_id = self.input_port_node_map.get(to_id).unwrap().clone();
+        let from_node = self.node(&from_node_id)?;
+        let to_node = self.node(&to_node_id)?;
         let (tx, rx) = sync_channel(16);
         for port in from_node.lock().unwrap().outputs_mut().iter_mut() {
             if port.id() == *from_id {
@@ -171,6 +173,8 @@ impl Graph {
             }
         }
         self.edges.insert(*from_id, *to_id);
+        self.add_output(&from_node_id);
+        self.add_input(&to_node_id);
         Ok(())
     }
 
@@ -250,7 +254,7 @@ mod test {
         assert_eq!(*g.edges().get(&n1_out_id).unwrap(), n2_in_id);
         assert_eq!(*g.input_port_node_map.get(&n2_in_id).unwrap(), n2_id);
         match &*g.node(&n1_id).unwrap().lock().unwrap() {
-            Node::Identity(ref n) => assert_eq!(n.outputs().len(), 1),
+            Node::Identity(ref n) => assert_eq!(n.outputs().len(), 2),
             _ => panic!(),
         };
         match &*g.node(&n2_id).unwrap().lock().unwrap() {
