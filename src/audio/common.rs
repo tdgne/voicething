@@ -106,6 +106,15 @@ pub enum SampleChunk {
     Complex(GenericSampleChunk<Complex32>),
 }
 
+impl SampleChunk {
+    pub fn metadata(&self) -> &AudioMetadata {
+        match self {
+            Self::Real(c) => c.metadata(),
+            Self::Complex(c) => c.metadata(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum WindowFunction {
     Hanning,

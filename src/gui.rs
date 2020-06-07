@@ -151,6 +151,15 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                         g.add_output(&node_id);
                         node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
                     }
+                    if MenuItem::new(im_str!("Sum")).build(&ui) {
+                        let mut node = Node::Aggregate(AggregateNode::new(AggregateSetting::Sum));
+                        let node_id = node.id();
+                        let mut g = g.lock().unwrap();
+                        g.add(node);
+                        g.add_input(&node_id);
+                        g.add_output(&node_id);
+                        node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                    }
                 });
             });
             Window::new(im_str!("I/O Monitor"))
@@ -194,6 +203,9 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                                     node.render(&ui, &mut node_editor_state);
                                 }
                                 Node::Dewindower(node) => {
+                                    node.render(&ui, &mut node_editor_state);
+                                }
+                                Node::Aggregate(node) => {
                                     node.render(&ui, &mut node_editor_state);
                                 }
                             }

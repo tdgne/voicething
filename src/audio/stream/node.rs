@@ -90,6 +90,7 @@ pub enum Node {
     Windower(Windower),
     Dewindower(Dewindower),
     Identity(IdentityNode),
+    Aggregate(AggregateNode),
 }
 
 #[derive(Debug, Clone)]
