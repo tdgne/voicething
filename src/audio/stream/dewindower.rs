@@ -49,15 +49,18 @@ impl Dewindower {
             if self.buffer.len() <= c {
                 self.buffer.push(chunk.samples(c).to_vec().into());
             } else {
-                for (i, b) in self.buffer[c].iter_mut().enumerate() {
-                    if i >= delay {
-                        *b += chunk.samples(c)[i - delay];
-                    }
+                for _ in 0..delay {
+                    self.buffer[c].push_back(0.0);
+                }
+                for i in 0..*chunk.duration_samples() {
+                    let l = self.buffer[c].len();
+                    self.buffer[c][l - chunk.duration_samples() + i] +=
+                        chunk.samples(c)[i] * delay as f32 / *chunk.duration_samples() as f32;
                 }
             }
         }
         let mut dewindowed_chunks = vec![];
-        while self.buffer[0].len() >= self.out_chunk_size {
+        while self.buffer[0].len() >= self.out_chunk_size * 2 {
             let mut dewindowed_chunk = GenericSampleChunk::from_flat_samples(
                 &vec![0.0; self.buffer.len() * self.out_chunk_size],
                 chunk.metadata().clone(),
@@ -70,16 +73,18 @@ impl Dewindower {
                 }
             }
             for b in self.buffer.iter_mut() {
-                for _ in 0..delay {
+                for _ in 0..self.out_chunk_size {
                     b.pop_front();
                 }
             }
             dewindowed_chunks.push(dewindowed_chunk);
         }
-        dewindowed_chunks.iter().map(|c| SampleChunk::Real(c.clone())).collect::<Vec<_>>()
+        dewindowed_chunks
+            .iter()
+            .map(|c| SampleChunk::Real(c.clone()))
+            .collect::<Vec<_>>()
     }
 }
-
 
 impl NodeTrait for Dewindower {
     fn id(&self) -> NodeId {
@@ -114,7 +119,7 @@ impl NodeTrait for Dewindower {
         if self.inputs.len() != 1 {
             return;
         }
-        if let Some(chunk) = self.inputs[0].try_recv().ok() {
+        while let Some(chunk) = self.inputs[0].try_recv().ok() {
             let chunks = self.process_chunk(chunk);
             for output in self.outputs().iter() {
                 for chunk in chunks.iter() {

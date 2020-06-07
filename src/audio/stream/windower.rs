@@ -63,15 +63,21 @@ impl Windower {
                 chunk.metadata().clone(),
             )
             .unwrap();
-            windowed_chunk.set_window_info(Some(WindowInfo::new(self.window_function.clone(), self.delay)));
+            windowed_chunk.set_window_info(Some(WindowInfo::new(
+                self.window_function.clone(),
+                self.delay,
+            )));
             for (c, b) in self.buffer.iter().enumerate() {
                 let samples = windowed_chunk.samples_mut(c);
                 for (i, s) in b.iter().take(self.window_size).enumerate() {
-                    samples[i] = *s * match self.window_function {
-                        WindowFunction::Rectangular => 1.0,
-                        WindowFunction::Hanning => Self::hanning_window(i, self.window_size),
-                        WindowFunction::Triangular => Self::triangular_window(i, self.window_size),
-                    };
+                    samples[i] = *s
+                        * match self.window_function {
+                            WindowFunction::Rectangular => 1.0,
+                            WindowFunction::Hanning => Self::hanning_window(i, self.window_size),
+                            WindowFunction::Triangular => {
+                                Self::triangular_window(i, self.window_size)
+                            }
+                        };
                 }
             }
             for b in self.buffer.iter_mut() {
@@ -81,7 +87,10 @@ impl Windower {
             }
             windowed_chunks.push(windowed_chunk);
         }
-        windowed_chunks.iter().map(|c| SampleChunk::Real(c.clone())).collect::<Vec<_>>()
+        windowed_chunks
+            .iter()
+            .map(|c| SampleChunk::Real(c.clone()))
+            .collect::<Vec<_>>()
     }
 }
 
@@ -134,7 +143,13 @@ mod test {
     use crate::audio::*;
     #[test]
     fn window_dewindow() {
-        let c = SampleChunk::Real(GenericSampleChunk::from_flat_samples(&vec![1.0; 1024*4], AudioMetadata::new(2, 44100)).unwrap());
+        let c = SampleChunk::Real(
+            GenericSampleChunk::from_flat_samples(
+                &vec![1.0; 1024 * 4],
+                AudioMetadata::new(2, 44100),
+            )
+            .unwrap(),
+        );
         let mut w = Windower::new(WindowFunction::Hanning, 300, 128);
         let mut dw = Dewindower::new(821);
         for n in w.process_chunk(c).into_iter() {

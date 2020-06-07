@@ -10,7 +10,7 @@ impl Windower {
     pub fn render(&mut self, ui: &Ui, state: &mut NodeEditorState) {
         ui.set_cursor_pos([0.0, 0.0]);
         let win_pos = ui.cursor_screen_pos();
-        let pos = state.node_pos(&self.id()).unwrap();
+        let pos = state.node_pos(&self.id()).unwrap().clone();
         let (w, h) = (100.0, 20.0);
         {
             let draw_list = ui.get_window_draw_list();
@@ -21,6 +21,11 @@ impl Windower {
                 .filled(true)
                 .build();
             draw_list.add_text(pos, (0.0, 0.0, 0.0, 1.0), "Windower");
+        }
+
+        state.set_input_pos(self.inputs()[0].id(), [pos[0], pos[1] - 5.0]);
+        for (i, output) in self.outputs().iter().enumerate() {
+            state.set_output_pos(output.id(), [pos[0] + 10.0 * i as f32, pos[1] + h]);
         }
 
         self.handle_input(ui, state, [w, h]);
