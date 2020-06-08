@@ -91,6 +91,8 @@ pub enum Node {
     Dewindower(Dewindower),
     Identity(IdentityNode),
     Aggregate(AggregateNode),
+    FourierTransform(FourierTransform),
+    Arithmetic(ArithmeticNode),
 }
 
 #[derive(Debug, Clone)]

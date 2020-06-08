@@ -48,7 +48,7 @@ impl FourierTransform {
 
     pub fn process_chunk(&self, chunk: SampleChunk) -> SampleChunk {
         let channels = *chunk.metadata().channels();
-        let samples = match chunk {
+        let mut samples = match &chunk {
             SampleChunk::Real(chunk) => (0..channels)
                 .map(|c| {
                     chunk
@@ -62,7 +62,7 @@ impl FourierTransform {
                 .map(|c| chunk.samples(c).to_vec())
                 .collect::<Vec<_>>(),
         };
-        let transformed = samples.clone();
+        let mut transformed = samples.clone();
         let mut planner = FFTplanner::new(self.inverse);
         let fft = planner.plan_fft(*chunk.duration_samples());
         for c in 0..channels {

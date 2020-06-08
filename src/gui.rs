@@ -123,6 +123,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                     });
                 });
                 ui.menu(im_str!("Nodes"), true, || {
+                    let default_pos = [100.0, 100.0];
                     if MenuItem::new(im_str!("TD-PSOLA")).build(&ui) {
                         let mut node = Node::Psola(PsolaNode::new(1.0));
                         let node_id = node.id();
@@ -130,7 +131,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                         g.add(node);
                         g.add_input(&node_id);
                         g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                        node_editor_state.set_node_pos(node_id, default_pos);
                     }
                     if MenuItem::new(im_str!("Windower")).build(&ui) {
                         let mut node =
@@ -140,7 +141,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                         g.add(node);
                         g.add_input(&node_id);
                         g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                        node_editor_state.set_node_pos(node_id, default_pos);
                     }
                     if MenuItem::new(im_str!("Dewindower")).build(&ui) {
                         let mut node = Node::Dewindower(Dewindower::new(1024));
@@ -149,7 +150,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                         g.add(node);
                         g.add_input(&node_id);
                         g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                        node_editor_state.set_node_pos(node_id, default_pos);
                     }
                     if MenuItem::new(im_str!("Sum")).build(&ui) {
                         let mut node = Node::Aggregate(AggregateNode::new(AggregateSetting::Sum));
@@ -158,7 +159,25 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                         g.add(node);
                         g.add_input(&node_id);
                         g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, [20.0, 20.0]);
+                        node_editor_state.set_node_pos(node_id, default_pos);
+                    }
+                    if MenuItem::new(im_str!("DFT/IDFT")).build(&ui) {
+                        let mut node = Node::FourierTransform(FourierTransform::new(false, false));
+                        let node_id = node.id();
+                        let mut g = g.lock().unwrap();
+                        g.add(node);
+                        g.add_input(&node_id);
+                        g.add_output(&node_id);
+                        node_editor_state.set_node_pos(node_id, default_pos);
+                    }
+                    if MenuItem::new(im_str!("Arithmetic")).build(&ui) {
+                        let mut node = Node::Arithmetic(ArithmeticNode::new(ArithmeticOperation::Log));
+                        let node_id = node.id();
+                        let mut g = g.lock().unwrap();
+                        g.add(node);
+                        g.add_input(&node_id);
+                        g.add_output(&node_id);
+                        node_editor_state.set_node_pos(node_id, default_pos);
                     }
                 });
             });
@@ -206,6 +225,12 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                                     node.render(&ui, &mut node_editor_state);
                                 }
                                 Node::Aggregate(node) => {
+                                    node.render(&ui, &mut node_editor_state);
+                                }
+                                Node::FourierTransform(node) => {
+                                    node.render(&ui, &mut node_editor_state);
+                                }
+                                Node::Arithmetic(node) => {
                                     node.render(&ui, &mut node_editor_state);
                                 }
                             }
