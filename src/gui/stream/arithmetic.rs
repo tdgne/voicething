@@ -1,5 +1,8 @@
 use super::*;
-use crate::audio::stream::{node::NodeTrait, arithmetic::{ArithmeticOperation, ArithmeticNode}};
+use crate::audio::stream::{
+    arithmetic::{ArithmeticNode, ArithmeticOperation},
+    node::NodeTrait,
+};
 use imgui::*;
 
 impl InputHandler for ArithmeticNode {}
@@ -49,8 +52,16 @@ impl ArithmeticNode {
             .build(&ui, || {
                 ui.radio_button(im_str!("Log"), self.op_mut(), ArithmeticOperation::Log);
                 ui.radio_button(im_str!("Exp"), self.op_mut(), ArithmeticOperation::Exp);
-                ui.radio_button(im_str!("Reciprocal"), self.op_mut(), ArithmeticOperation::Reciprocal);
-                ui.radio_button(im_str!("Inverse"), self.op_mut(), ArithmeticOperation::Inverse);
+                ui.radio_button(
+                    im_str!("Reciprocal"),
+                    self.op_mut(),
+                    ArithmeticOperation::Reciprocal,
+                );
+                ui.radio_button(
+                    im_str!("Inverse"),
+                    self.op_mut(),
+                    ArithmeticOperation::Inverse,
+                );
             });
     }
 }

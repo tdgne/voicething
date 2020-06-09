@@ -1,5 +1,5 @@
 use super::*;
-use crate::audio::stream::{node::NodeTrait, ft::FourierTransform};
+use crate::audio::stream::{ft::FourierTransform, node::NodeTrait};
 use imgui::*;
 
 impl InputHandler for FourierTransform {}
@@ -35,9 +35,9 @@ impl FourierTransform {
 
     fn name(&self) -> &str {
         if self.inverse() {
-            "DFT"
-        } else {
             "IDFT"
+        } else {
+            "DFT"
         }
     }
 
