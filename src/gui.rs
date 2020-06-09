@@ -124,61 +124,25 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                 });
                 ui.menu(im_str!("Nodes"), true, || {
                     let default_pos = [100.0, 100.0];
-                    if MenuItem::new(im_str!("TD-PSOLA")).build(&ui) {
-                        let mut node = Node::Psola(PsolaNode::new(1.0));
-                        let node_id = node.id();
-                        let mut g = g.lock().unwrap();
-                        g.add(node);
-                        g.add_input(&node_id);
-                        g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, default_pos);
+                    macro_rules! make_node_menu {
+                        ($name:expr, $node:expr) => {
+                            if MenuItem::new(im_str!($name)).build(&ui) {
+                                let mut node = $node;
+                                let node_id = node.id();
+                                let mut g = g.lock().unwrap();
+                                g.add(node);
+                                g.add_input(&node_id).unwrap();
+                                g.add_output(&node_id).unwrap();
+                                node_editor_state.set_node_pos(node_id, default_pos);
+                            }
+                        }
                     }
-                    if MenuItem::new(im_str!("Windower")).build(&ui) {
-                        let mut node =
-                            Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64));
-                        let node_id = node.id();
-                        let mut g = g.lock().unwrap();
-                        g.add(node);
-                        g.add_input(&node_id);
-                        g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, default_pos);
-                    }
-                    if MenuItem::new(im_str!("Dewindower")).build(&ui) {
-                        let mut node = Node::Dewindower(Dewindower::new(1024));
-                        let node_id = node.id();
-                        let mut g = g.lock().unwrap();
-                        g.add(node);
-                        g.add_input(&node_id);
-                        g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, default_pos);
-                    }
-                    if MenuItem::new(im_str!("Sum")).build(&ui) {
-                        let mut node = Node::Aggregate(AggregateNode::new(AggregateSetting::Sum));
-                        let node_id = node.id();
-                        let mut g = g.lock().unwrap();
-                        g.add(node);
-                        g.add_input(&node_id);
-                        g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, default_pos);
-                    }
-                    if MenuItem::new(im_str!("DFT/IDFT")).build(&ui) {
-                        let mut node = Node::FourierTransform(FourierTransform::new(false, false));
-                        let node_id = node.id();
-                        let mut g = g.lock().unwrap();
-                        g.add(node);
-                        g.add_input(&node_id);
-                        g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, default_pos);
-                    }
-                    if MenuItem::new(im_str!("Arithmetic")).build(&ui) {
-                        let mut node = Node::Arithmetic(ArithmeticNode::new(ArithmeticOperation::Log));
-                        let node_id = node.id();
-                        let mut g = g.lock().unwrap();
-                        g.add(node);
-                        g.add_input(&node_id);
-                        g.add_output(&node_id);
-                        node_editor_state.set_node_pos(node_id, default_pos);
-                    }
+                    make_node_menu!("TD-PSOLA", Node::Psola(PsolaNode::new(1.0)));
+                    make_node_menu!("Windower", Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64)));
+                    make_node_menu!("Dewindower", Node::Dewindower(Dewindower::new(1024)));
+                    make_node_menu!("Sum", Node::Aggregate(AggregateNode::new(AggregateSetting::Sum)));
+                    make_node_menu!("DFT/IDFT", Node::FourierTransform(FourierTransform::new(false, false)));
+                    make_node_menu!("Arithmetic", Node::Arithmetic(ArithmeticNode::new(ArithmeticOperation::Log)));
                 });
             });
             Window::new(im_str!("I/O Monitor"))
@@ -211,29 +175,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                     let mut connection_request = None;
                     {
                         for (_, node) in g.lock().unwrap().nodes().iter() {
-                            match &mut *node.lock().unwrap() {
-                                Node::Psola(node) => {
-                                    node.render(&ui, &mut node_editor_state);
-                                }
-                                Node::Identity(node) => {
-                                    node.render(&ui, &mut node_editor_state);
-                                }
-                                Node::Windower(node) => {
-                                    node.render(&ui, &mut node_editor_state);
-                                }
-                                Node::Dewindower(node) => {
-                                    node.render(&ui, &mut node_editor_state);
-                                }
-                                Node::Aggregate(node) => {
-                                    node.render(&ui, &mut node_editor_state);
-                                }
-                                Node::FourierTransform(node) => {
-                                    node.render(&ui, &mut node_editor_state);
-                                }
-                                Node::Arithmetic(node) => {
-                                    node.render(&ui, &mut node_editor_state);
-                                }
-                            }
+                            node.lock().unwrap().render(&ui, &mut node_editor_state);
                             for inputs in node.lock().unwrap().inputs().iter() {
                                 connection_request = connection_request
                                     .or(inputs.render(&ui, &mut node_editor_state));
