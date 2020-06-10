@@ -29,11 +29,9 @@ impl ArithmeticNode {
             state.set_output_pos(output.id(), [pos[0] + 10.0 * i as f32, pos[1] + h]);
         }
 
-        let focused = self.handle_input(ui, state, [w, h]);
+        let clicked = self.handle_input(ui, state, [w, h]);
 
-        if focused {
-            self.render_control_window(ui);
-        }
+        self.render_control_window(ui, state, clicked);
     }
 
     fn name(&self) -> &str {
@@ -46,9 +44,17 @@ impl ArithmeticNode {
         }
     }
 
-    pub fn render_control_window(&mut self, ui: &Ui) {
-        Window::new(&im_str!("{} {:?}", self.name(), self.id()))
+    pub fn render_control_window(&mut self, ui: &Ui, state: &mut NodeEditorState, focused: bool) {
+        let opened = state.window_opened(&self.id()).clone();
+        if !opened {
+            return
+        }
+        let mouse_pos = ui.io().mouse_pos;
+        Window::new(&im_str!("Arithmetic Node {:?}", self.id()))
+            .opened(state.window_opened_mut(&self.id()))
+            .focused(focused)
             .always_auto_resize(true)
+            .position(mouse_pos, Condition::Once)
             .build(&ui, || {
                 ui.radio_button(im_str!("Log"), self.op_mut(), ArithmeticOperation::Log);
                 ui.radio_button(im_str!("Exp"), self.op_mut(), ArithmeticOperation::Exp);
