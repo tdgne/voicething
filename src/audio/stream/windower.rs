@@ -110,7 +110,7 @@ impl NodeTrait for Windower {
         if self.inputs().len() != 1 {
             return;
         }
-        if let Some(chunk) = self.inputs()[0].try_recv().ok() {
+        while let Some(chunk) = self.inputs()[0].try_recv().ok() {
             let chunks = self.process_chunk(chunk);
             for output in self.outputs().iter() {
                 for chunk in chunks.iter() {

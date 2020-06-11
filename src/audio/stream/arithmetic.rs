@@ -93,7 +93,7 @@ impl NodeTrait for ArithmeticNode {
         if self.inputs().len() != 1 {
             return;
         }
-        if let Some(chunk) = self.inputs()[0].try_recv().ok() {
+        while let Some(chunk) = self.inputs()[0].try_recv().ok() {
             let chunk = self.process_chunk(chunk);
             for output in self.outputs().iter() {
                 let result = output.try_send(chunk.clone());

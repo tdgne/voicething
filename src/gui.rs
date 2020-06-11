@@ -17,11 +17,11 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
     let system = support::init("voicething");
 
     let rechunker = Arc::new(Mutex::new(Rechunker::new(2, 44100)));
-    let (rechunk_tx, rechunk_rx) = channel();
+    let (rechunk_tx, rechunk_rx) = sync_channel(32);
     thread::spawn(move || loop {
         rechunker.lock().unwrap().feed_chunk(input.recv().unwrap());
         while let Some(chunk) = rechunker.lock().unwrap().pull_chunk(1024) {
-            rechunk_tx.send(chunk.clone()).unwrap();
+            rechunk_tx.try_send(chunk.clone()).unwrap();
         }
     });
 
@@ -47,7 +47,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
     g.add(Node::Psola(psola_node));
     node_editor_state.set_node_pos(psola_node_id, [20.0, 60.0]);
 
-    let (output_monitor_tx, output_monitor_rx) = sync_channel(16);
+    let (output_monitor_tx, output_monitor_rx) = sync_channel(32);
     let mut output_node = IdentityNode::new("Output".to_string());
     let output_node_id = output_node.id();
     {

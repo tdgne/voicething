@@ -80,6 +80,7 @@ impl Graph {
     }
 
     fn bfs_run_once(&self, node: Arc<Mutex<Node>>) -> Result<(), Box<dyn Error>> {
+        let t = std::time::SystemTime::now();
         let mut q = VecDeque::new();
         q.push_back(node);
         while !q.is_empty() {
@@ -95,6 +96,7 @@ impl Graph {
                 }
             }
         }
+        println!("{}", t.elapsed().unwrap().subsec_millis());
         Ok(())
     }
 
@@ -157,7 +159,7 @@ impl Graph {
         let to_node_id = self.input_port_node_map.get(to_id).unwrap().clone();
         let from_node = self.node(&from_node_id)?;
         let to_node = self.node(&to_node_id)?;
-        let (tx, rx) = sync_channel(16);
+        let (tx, rx) = sync_channel(32);
         for port in from_node.lock().unwrap().outputs_mut().iter_mut() {
             if port.id() == *from_id {
                 port.tx = Some(tx);

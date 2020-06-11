@@ -97,14 +97,19 @@ impl NodeTrait for AggregateNode {
         self.id
     }
     fn run_once(&mut self) {
-        let chunks = self
-            .inputs()
-            .iter()
-            .flat_map(|input| input.try_recv().ok())
-            .collect::<Vec<_>>();
-        if let Some(chunk) = self.process_chunk(chunks) {
-            for output in self.outputs().iter() {
-                let _ = output.try_send(chunk.clone());
+        loop {
+            let chunks = self
+                .inputs()
+                .iter()
+                .flat_map(|input| input.try_recv().ok())
+                .collect::<Vec<_>>();
+            if chunks.len() == 0 {
+                break;
+            }
+            if let Some(chunk) = self.process_chunk(chunks) {
+                for output in self.outputs().iter() {
+                    let _ = output.try_send(chunk.clone());
+                }
             }
         }
     }
