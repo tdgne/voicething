@@ -21,11 +21,16 @@ pub use windower::*;
 
 use std::collections::HashMap;
 use crate::audio::stream::node::*;
+use crate::audio::stream::graph::Graph;
 use imgui::*;
+use serde::{Serialize, Deserialize};
+use std::sync::{Arc, Mutex};
 
 pub type ConnectRequest = (OutputPortId, InputPortId);
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NodeEditorState {
+    graph: Arc<Mutex<Graph>>,
     node_pos: HashMap<NodeId, [f32; 2]>,
     input_pos: HashMap<InputPortId, [f32; 2]>,
     output_pos: HashMap<OutputPortId, [f32; 2]>,
@@ -35,8 +40,9 @@ pub struct NodeEditorState {
 }
 
 impl NodeEditorState {
-    pub fn new() -> Self {
+    pub fn new(graph: Arc<Mutex<Graph>>) -> Self {
         Self {
+            graph,
             node_pos: HashMap::new(),
             input_pos: HashMap::new(),
             output_pos: HashMap::new(),
@@ -44,6 +50,10 @@ impl NodeEditorState {
             right_dragged: None,
             window_opened: HashMap::new(),
         }
+    }
+
+    pub fn graph(&self) -> Arc<Mutex<Graph>> {
+        self.graph.clone()
     }
 
     pub fn set_node_pos(&mut self, uuid: NodeId, pos: [f32; 2]) {

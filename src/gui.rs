@@ -26,49 +26,58 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
         }
     });
 
-    let mut node_editor_state = NodeEditorState::new();
 
     let mut buffer = String::new();
     io::stdin().read_to_string(&mut buffer);
-    let mut g: Graph = match serde_json::from_str(&buffer) {
-        Ok(g) => g,
+    let mut node_editor_state: NodeEditorState = match serde_json::from_str(&buffer) {
+        Ok(s) => s,
         _ => {
-            Graph::default()
+            let mut g = Graph::default();
+            let mut input_node = g.input_node().unwrap();
+            let input_node_id = input_node.lock().unwrap().id();
+            
+            let mut output_node = g.output_node().unwrap();
+            let output_node_id = output_node.lock().unwrap().id();
+
+            let g = Arc::new(Mutex::new(g));
+            let mut node_editor_state = NodeEditorState::new(g);
+            node_editor_state.set_node_pos(input_node_id, [20.0, 20.0]);
+            node_editor_state.set_node_pos(output_node_id, [20.0, 100.0]);
+            node_editor_state
         }
     };
 
-    let (input_monitor_tx, input_monitor_rx) = sync_channel(32);
-    let mut input_node = g.input_node().unwrap();
-    let input_node_id = input_node.lock().unwrap().id();
-    {
-        let mut input_node = input_node.lock().unwrap();
-        let mut input_port = input_node.add_input().unwrap();
-        input_port.rx = Some(rechunk_rx);
-    }
-    {
-        let mut input_node = input_node.lock().unwrap();
-        let mut output_port = input_node.add_output().unwrap();
-        output_port.tx = Some(input_monitor_tx);
-    }
-    node_editor_state.set_node_pos(input_node_id, [20.0, 20.0]);
+    let g = node_editor_state.graph();
+    let (input_monitor_rx, output_monitor_rx) = {
+        let g = g.lock().unwrap();
+        let mut input_node = g.input_node().unwrap();
+        let mut output_node = g.output_node().unwrap();
+        let (input_monitor_tx, input_monitor_rx) = sync_channel(32);
+        let (output_monitor_tx, output_monitor_rx) = sync_channel(32);
+        {
+            let mut input_node = input_node.lock().unwrap();
+            let mut input_port = input_node.add_input().unwrap();
+            input_port.rx = Some(rechunk_rx);
+        }
+        {
+            let mut input_node = input_node.lock().unwrap();
+            let mut output_port = input_node.add_output().unwrap();
+            output_port.tx = Some(input_monitor_tx);
+        }
+        {
+            let mut output_node = output_node.lock().unwrap();
+            let mut output_port = output_node.add_output().unwrap();
+            output_port.tx = Some(output_monitor_tx);
+        }
+        {
+            let mut output_node = output_node.lock().unwrap();
+            let mut output_port = output_node.add_output().unwrap();
+            output_port.tx = Some(output);
+        }
+        (input_monitor_rx, output_monitor_rx)
+    };
 
-    let (output_monitor_tx, output_monitor_rx) = sync_channel(32);
-    let mut output_node = g.output_node().unwrap();
-    let output_node_id = output_node.lock().unwrap().id();
-    {
-        let mut output_node = output_node.lock().unwrap();
-        let mut output_port = output_node.add_output().unwrap();
-        output_port.tx = Some(output_monitor_tx);
-    }
-    {
-        let mut output_node = output_node.lock().unwrap();
-        let mut output_port = output_node.add_output().unwrap();
-        output_port.tx = Some(output);
-    }
-    node_editor_state.set_node_pos(output_node_id, [20.0, 100.0]);
-
-    let g = Arc::new(Mutex::new(g));
-
+    
     {
         let g = g.clone();
         thread::spawn(move || loop {
@@ -90,7 +99,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
             ui.main_menu_bar(|| {
                 ui.menu(im_str!("File"), true, || {
                     if MenuItem::new(im_str!("Save")).build(&ui) {
-                        println!("{}", serde_json::to_string(&*g.lock().unwrap()).unwrap());
+                        println!("{}", serde_json::to_string(&node_editor_state).unwrap());
                     }
                 });
                 ui.menu(im_str!("Devices"), true, || {
