@@ -8,6 +8,8 @@ pub struct IdentityNode {
     io: NodeIo,
     name: String,
     id: NodeId,
+    #[serde(skip)]
+    last_chunk: Option<SampleChunk>,
 }
 
 impl HasNodeIo for IdentityNode {
@@ -26,11 +28,16 @@ impl IdentityNode {
             io: NodeIo::new(),
             name,
             id: NodeId::new(),
+            last_chunk: None,
         }
     }
     
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn last_chunk(&self) -> Option<&SampleChunk> {
+        self.last_chunk.as_ref()
     }
 }
 
@@ -43,6 +50,7 @@ impl NodeTrait for IdentityNode {
             return;
         }
         if let Some(chunk) = self.inputs()[0].try_recv().ok() {
+            self.last_chunk = Some(chunk.clone());
             for output in self.outputs().iter() {
                 let result = output.try_send(chunk.clone());
             }

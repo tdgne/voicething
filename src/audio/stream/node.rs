@@ -93,6 +93,7 @@ pub enum Node {
     Aggregate(AggregateNode),
     FourierTransform(FourierTransform),
     Arithmetic(ArithmeticNode),
+    Filter(FilterNode),
 }
 
 #[derive(Debug, Clone)]

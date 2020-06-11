@@ -26,6 +26,9 @@ impl Node {
             Node::Arithmetic(node) => {
                 node.render(ui, node_editor_state);
             }
+            Node::Filter(node) => {
+                node.render(ui, node_editor_state);
+            }
         }
     }
 }
