@@ -61,11 +61,11 @@ impl Graph {
     pub fn default() -> Self {
         let mut g = Self::new();
 
-        let mut input_node = IdentityNode::new("Input".to_string());
+        let input_node = IdentityNode::new("Input".to_string());
         let input_node_id = input_node.id();
         g.add(Node::Identity(input_node));
 
-        let mut output_node = IdentityNode::new("Output".to_string());
+        let output_node = IdentityNode::new("Output".to_string());
         let output_node_id = output_node.id();
         g.add(Node::Identity(output_node));
 
@@ -76,6 +76,25 @@ impl Graph {
         }
 
         g
+    }
+
+    pub fn connect_port_channels(&self) {
+        for (oid, iid) in self.edges.iter() {
+            let onode_id = self.output_port_node_map.get(&oid).unwrap();
+            let inode_id = self.input_port_node_map.get(&iid).unwrap();
+            let onode = self.node(onode_id).unwrap();
+            let mut onode = onode.lock().unwrap();
+            let inode = self.node(inode_id).unwrap();
+            let mut inode = inode.lock().unwrap();
+            let mut oport = onode.outputs_mut().iter_mut().find(|p| p.id() == *oid).unwrap();
+            let mut iport = inode.inputs_mut().iter_mut().find(|p| p.id() == *iid).unwrap();
+            if oport.tx.is_some() && iport.rx.is_some() {
+                continue;
+            }
+            let (tx, rx) = sync_channel(32);
+            oport.tx = Some(tx);
+            iport.rx = Some(rx);
+        }
     }
 
     fn search_identity_node_by_name(&self, name: &'static str) -> Result<Arc<Mutex<Node>>, Box<dyn Error>> {

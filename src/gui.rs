@@ -46,8 +46,9 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
             node_editor_state
         }
     };
-
     let g = node_editor_state.graph();
+    g.lock().unwrap().connect_port_channels();
+
     let (input_monitor_rx, output_monitor_rx) = {
         let g = g.lock().unwrap();
         let mut input_node = g.input_node().unwrap();
