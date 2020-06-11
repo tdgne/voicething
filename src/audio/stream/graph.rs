@@ -1,13 +1,14 @@
+use super::identity::*;
 use super::node::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
+use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
 use std::{
     fmt,
     fmt::{Display, Formatter},
 };
-use std::sync::mpsc::{sync_channel};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Graph {
@@ -57,6 +58,46 @@ impl Graph {
         }
     }
 
+    pub fn default() -> Self {
+        let mut g = Self::new();
+
+        let mut input_node = IdentityNode::new("Input".to_string());
+        let input_node_id = input_node.id();
+        g.add(Node::Identity(input_node));
+
+        let mut output_node = IdentityNode::new("Output".to_string());
+        let output_node_id = output_node.id();
+        g.add(Node::Identity(output_node));
+
+        {
+            let p1 = g.add_output(&input_node_id).unwrap();
+            let p2 = g.add_input(&output_node_id).unwrap();
+            g.connect_ports(&p1, &p2).unwrap();
+        }
+
+        g
+    }
+
+    fn search_identity_node_by_name(&self, name: &'static str) -> Result<Arc<Mutex<Node>>, Box<dyn Error>> {
+        let mut input = Err(ExistenceError(name));
+        for (_, v) in self.nodes.iter() {
+            if let Node::Identity(node) = &*v.lock().unwrap() {
+                if node.name() == name.to_string() {
+                    input = Ok(v.clone());
+                }
+            }
+        }
+        Ok(input?)
+    }
+
+    pub fn input_node(&self) -> Result<Arc<Mutex<Node>>, Box<dyn Error>> {
+        self.search_identity_node_by_name("Input")
+    }
+
+    pub fn output_node(&self) -> Result<Arc<Mutex<Node>>, Box<dyn Error>> {
+        self.search_identity_node_by_name("Output")
+    }
+
     pub fn is_input_port(&self, id: &InputPortId) -> bool {
         self.input_port_node_map.get(id).is_some()
     }
@@ -86,11 +127,9 @@ impl Graph {
             let node = q.pop_front().unwrap();
             node.lock().unwrap().run_once();
             for output_port in node.lock().unwrap().outputs() {
-                if let Some(other_end_port_id) = self
-                    .edges
-                    .get(&output_port.id())
-                {
-                    let other_end_node_id = self.input_port_node_map.get(&other_end_port_id).unwrap();
+                if let Some(other_end_port_id) = self.edges.get(&output_port.id()) {
+                    let other_end_node_id =
+                        self.input_port_node_map.get(&other_end_port_id).unwrap();
                     q.push_back(self.node(&other_end_node_id)?);
                 }
             }
@@ -99,17 +138,7 @@ impl Graph {
     }
 
     pub fn run_once(&self) -> Result<(), Box<dyn Error>> {
-        let input = {
-            let mut input = Err(ExistenceError("Input"));
-            for (_, v) in self.nodes.iter() {
-                if let Node::Identity(node) = &*v.lock().unwrap() {
-                    if node.name() == "Input" {
-                        input = Ok(v.clone());
-                    }
-                }
-            }
-            input?
-        };
+        let input = self.input_node()?;
         // TODO: think of a wiser way
         for _ in 0..self.nodes.len() {
             self.bfs_run_once(input.clone())?;
@@ -131,8 +160,20 @@ impl Graph {
 
     pub fn remove(&mut self, id: NodeId) -> Option<Arc<Mutex<Node>>> {
         let node = self.node(&id).unwrap();
-        let input_ids = node.lock().unwrap().inputs().iter().map(|p| p.id()).collect::<Vec<_>>();
-        let output_ids = node.lock().unwrap().outputs().iter().map(|p| p.id()).collect::<Vec<_>>();
+        let input_ids = node
+            .lock()
+            .unwrap()
+            .inputs()
+            .iter()
+            .map(|p| p.id())
+            .collect::<Vec<_>>();
+        let output_ids = node
+            .lock()
+            .unwrap()
+            .outputs()
+            .iter()
+            .map(|p| p.id())
+            .collect::<Vec<_>>();
         for port in input_ids.iter() {
             self.detach_input_port(port);
         }
@@ -150,7 +191,11 @@ impl Graph {
         }
     }
 
-    pub fn connect_ports(&mut self, from_id: &OutputPortId, to_id: &InputPortId) -> Result<(), Box<dyn Error>> {
+    pub fn connect_ports(
+        &mut self,
+        from_id: &OutputPortId,
+        to_id: &InputPortId,
+    ) -> Result<(), Box<dyn Error>> {
         self.detach_output_port(from_id);
         self.detach_input_port(to_id);
         let from_node_id = self.output_port_node_map.get(from_id).unwrap().clone();
@@ -178,7 +223,11 @@ impl Graph {
         Ok(())
     }
 
-    pub fn disconnect_ports(&mut self, from_id: &OutputPortId, to_id: &InputPortId) -> Result<(), Box<dyn Error>> {
+    pub fn disconnect_ports(
+        &mut self,
+        from_id: &OutputPortId,
+        to_id: &InputPortId,
+    ) -> Result<(), Box<dyn Error>> {
         let from_node = self.node(self.output_port_node_map.get(from_id).unwrap())?;
         let to_node = self.node(self.input_port_node_map.get(to_id).unwrap())?;
         for port in from_node.lock().unwrap().outputs_mut().iter_mut() {

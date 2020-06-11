@@ -1,8 +1,9 @@
 use imgui::*;
 use serde_json;
-use std::sync::mpsc::{channel, sync_channel, Receiver, SyncSender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::io::{self, Read};
 
 mod stream;
 mod support;
@@ -25,52 +26,46 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
         }
     });
 
-    let mut g = Graph::new();
     let mut node_editor_state = NodeEditorState::new();
 
-    let (input_monitor_tx, input_monitor_rx) = sync_channel(16);
-    let mut input_node = IdentityNode::new("Input".to_string());
-    let input_node_id = input_node.id();
+    let mut buffer = String::new();
+    io::stdin().read_to_string(&mut buffer);
+    let mut g: Graph = match serde_json::from_str(&buffer) {
+        Ok(g) => g,
+        _ => {
+            Graph::default()
+        }
+    };
+
+    let (input_monitor_tx, input_monitor_rx) = sync_channel(32);
+    let mut input_node = g.input_node().unwrap();
+    let input_node_id = input_node.lock().unwrap().id();
     {
-        let input_port = input_node.add_input().unwrap();
+        let mut input_node = input_node.lock().unwrap();
+        let mut input_port = input_node.add_input().unwrap();
         input_port.rx = Some(rechunk_rx);
     }
     {
-        let output_port = input_node.add_output().unwrap();
+        let mut input_node = input_node.lock().unwrap();
+        let mut output_port = input_node.add_output().unwrap();
         output_port.tx = Some(input_monitor_tx);
     }
-    g.add(Node::Identity(input_node));
     node_editor_state.set_node_pos(input_node_id, [20.0, 20.0]);
 
-    let psola_node = PsolaNode::new(1.0);
-    let psola_node_id = psola_node.id();
-    g.add(Node::Psola(psola_node));
-    node_editor_state.set_node_pos(psola_node_id, [20.0, 60.0]);
-
     let (output_monitor_tx, output_monitor_rx) = sync_channel(32);
-    let mut output_node = IdentityNode::new("Output".to_string());
-    let output_node_id = output_node.id();
+    let mut output_node = g.output_node().unwrap();
+    let output_node_id = output_node.lock().unwrap().id();
     {
-        let output_port = output_node.add_output().unwrap();
+        let mut output_node = output_node.lock().unwrap();
+        let mut output_port = output_node.add_output().unwrap();
         output_port.tx = Some(output_monitor_tx);
     }
     {
-        let output_port = output_node.add_output().unwrap();
+        let mut output_node = output_node.lock().unwrap();
+        let mut output_port = output_node.add_output().unwrap();
         output_port.tx = Some(output);
     }
-    g.add(Node::Identity(output_node));
     node_editor_state.set_node_pos(output_node_id, [20.0, 100.0]);
-
-    {
-        let p1 = g.add_output(&input_node_id).unwrap();
-        let p2 = g.add_input(&psola_node_id).unwrap();
-        g.connect_ports(&p1, &p2).unwrap();
-    }
-    {
-        let p1 = g.add_output(&psola_node_id).unwrap();
-        let p2 = g.add_input(&output_node_id).unwrap();
-        g.connect_ports(&p1, &p2).unwrap();
-    }
 
     let g = Arc::new(Mutex::new(g));
 
@@ -82,7 +77,6 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
         });
     }
 
-    println!("{}", serde_json::to_string(&*g.lock().unwrap()).unwrap());
 
     {
         let g = g.clone();
@@ -94,6 +88,11 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
             let current_input_device_name = host.current_input_device_name();
             let current_output_device_name = host.current_output_device_name();
             ui.main_menu_bar(|| {
+                ui.menu(im_str!("File"), true, || {
+                    if MenuItem::new(im_str!("Save")).build(&ui) {
+                        println!("{}", serde_json::to_string(&*g.lock().unwrap()).unwrap());
+                    }
+                });
                 ui.menu(im_str!("Devices"), true, || {
                     ui.menu(im_str!("Input"), true, || {
                         for name in host.input_device_names().iter() {
