@@ -58,10 +58,10 @@ pub trait NodeTrait: HasNodeIo {
     fn outputs(&self) -> &[OutputPort] {
         self.node_io().outputs()
     }
-    fn inputs_mut(&mut self) -> &mut [InputPort] {
+    fn inputs_mut(&mut self) -> &mut Vec<InputPort> {
         self.node_io_mut().inputs_mut()
     }
-    fn outputs_mut(&mut self) -> &mut [OutputPort] {
+    fn outputs_mut(&mut self) -> &mut Vec<OutputPort> {
         self.node_io_mut().outputs_mut()
     }
     fn add_input(&mut self) -> Result<&mut InputPort, Box<dyn std::error::Error>> {

@@ -78,6 +78,44 @@ impl Graph {
         g
     }
 
+    pub fn remove_unregistered_ports(&self) {
+        for node in self.nodes.values() {
+            let mut node = node.lock().unwrap();
+            let mut vec = node.outputs_mut();
+            loop {
+                let remove_index = vec
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, p)| !self.is_output_port(&p.id()))
+                    .map(|(i, _)| i)
+                    .take(1)
+                    .collect::<Vec<_>>();
+                if remove_index.len() > 0 {
+                    let i = remove_index[0];
+                    vec.remove(i);
+                } else {
+                    break;
+                }
+            }
+            let mut vec = node.inputs_mut();
+            loop {
+                let remove_index = vec
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, p)| !self.is_input_port(&p.id()))
+                    .map(|(i, _)| i)
+                    .take(1)
+                    .collect::<Vec<_>>();
+                if remove_index.len() > 0 {
+                    let i = remove_index[0];
+                    vec.remove(i);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     pub fn connect_port_channels(&self) {
         for (oid, iid) in self.edges.iter() {
             let onode_id = self.output_port_node_map.get(&oid).unwrap();
@@ -86,8 +124,16 @@ impl Graph {
             let mut onode = onode.lock().unwrap();
             let inode = self.node(inode_id).unwrap();
             let mut inode = inode.lock().unwrap();
-            let mut oport = onode.outputs_mut().iter_mut().find(|p| p.id() == *oid).unwrap();
-            let mut iport = inode.inputs_mut().iter_mut().find(|p| p.id() == *iid).unwrap();
+            let mut oport = onode
+                .outputs_mut()
+                .iter_mut()
+                .find(|p| p.id() == *oid)
+                .unwrap();
+            let mut iport = inode
+                .inputs_mut()
+                .iter_mut()
+                .find(|p| p.id() == *iid)
+                .unwrap();
             if oport.tx.is_some() && iport.rx.is_some() {
                 continue;
             }
@@ -97,7 +143,10 @@ impl Graph {
         }
     }
 
-    fn search_identity_node_by_name(&self, name: &'static str) -> Result<Arc<Mutex<Node>>, Box<dyn Error>> {
+    fn search_identity_node_by_name(
+        &self,
+        name: &'static str,
+    ) -> Result<Arc<Mutex<Node>>, Box<dyn Error>> {
         let mut input = Err(ExistenceError(name));
         for (_, v) in self.nodes.iter() {
             if let Node::Identity(node) = &*v.lock().unwrap() {
