@@ -80,7 +80,6 @@ impl Graph {
     }
 
     fn bfs_run_once(&self, node: Arc<Mutex<Node>>) -> Result<(), Box<dyn Error>> {
-        let t = std::time::SystemTime::now();
         let mut q = VecDeque::new();
         q.push_back(node);
         while !q.is_empty() {
@@ -96,7 +95,6 @@ impl Graph {
                 }
             }
         }
-        println!("{}", t.elapsed().unwrap().subsec_millis());
         Ok(())
     }
 
