@@ -41,9 +41,25 @@ impl AggregateNode {
             }
         }
 
-        self.handle_input(ui, state, [w, h]);
+        let clicked = self.handle_input(ui, state, [w, h]);
+
+        self.render_control_window(ui, state, clicked);
     }
 
-    pub fn render_control_window(&mut self, ui: &Ui) {
+    pub fn render_control_window(&mut self, ui: &Ui, state: &mut NodeEditorState, focused: bool) {
+        let opened = state.window_opened(&self.id()).clone();
+        if !opened {
+            return
+        }
+        let mouse_pos = ui.io().mouse_pos;
+        Window::new(&im_str!("Aggregate {:?}", self.id()))
+            .opened(state.window_opened_mut(&self.id()))
+            .focused(focused)
+            .always_auto_resize(true)
+            .position(mouse_pos, Condition::Once)
+            .build(&ui, || {
+                ui.radio_button(im_str!("Sum"), self.setting_mut(), AggregateSetting::Sum);
+                ui.radio_button(im_str!("Product"), self.setting_mut(), AggregateSetting::Product);
+            });
     }
 }

@@ -11,7 +11,7 @@ pub struct AggregateNode {
     setting: AggregateSetting,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Copy, Clone)]
 pub enum AggregateSetting {
     Sum,
     Product,
@@ -37,6 +37,10 @@ impl AggregateNode {
 
     pub fn setting(&self) -> &AggregateSetting {
         &self.setting
+    }
+
+    pub fn setting_mut(&mut self) -> &mut AggregateSetting {
+        &mut self.setting
     }
 
     pub fn process_chunk(&mut self, chunks: Vec<SampleChunk>) -> Option<SampleChunk> {

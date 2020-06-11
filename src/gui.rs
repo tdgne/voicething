@@ -140,7 +140,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                     make_node_menu!("TD-PSOLA", Node::Psola(PsolaNode::new(1.0)));
                     make_node_menu!("Windower", Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64)));
                     make_node_menu!("Dewindower", Node::Dewindower(Dewindower::new(1024)));
-                    make_node_menu!("Sum", Node::Aggregate(AggregateNode::new(AggregateSetting::Sum)));
+                    make_node_menu!("Sum/Product", Node::Aggregate(AggregateNode::new(AggregateSetting::Sum)));
                     make_node_menu!("DFT/IDFT", Node::FourierTransform(FourierTransform::new(false, false)));
                     make_node_menu!("Arithmetic", Node::Arithmetic(ArithmeticNode::new(ArithmeticOperation::Log)));
                     make_node_menu!("Filter", Node::Filter(FilterNode::new(FilterOperation::ReplaceLowerAmplitudesFd{value: 0.0, threshold: 100.0})));
