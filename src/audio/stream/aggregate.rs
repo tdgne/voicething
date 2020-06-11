@@ -81,15 +81,13 @@ impl AggregateNode {
         let metadata = chunks[0].metadata().clone();
         if is_real {
             let new_samples = new_samples.iter().map(|s| s.re).collect::<Vec<_>>();
-            Some(SampleChunk::Real(
-                GenericSampleChunk::from_flat_samples(&new_samples, metadata)
-                    .unwrap(),
-            ))
+            let mut new_chunk = GenericSampleChunk::from_flat_samples(&new_samples, metadata).unwrap();
+            new_chunk.set_window_info(chunks[0].window_info().clone());
+            Some(SampleChunk::Real(new_chunk))
         } else {
-            Some(SampleChunk::Complex(
-                GenericSampleChunk::from_flat_samples(&new_samples, metadata)
-                    .unwrap(),
-            ))
+            let mut new_chunk = GenericSampleChunk::from_flat_samples(&new_samples, metadata).unwrap();
+            new_chunk.set_window_info(chunks[0].window_info().clone());
+            Some(SampleChunk::Complex(new_chunk))
         }
     }
 }
