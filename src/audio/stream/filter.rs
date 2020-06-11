@@ -60,7 +60,7 @@ impl FilterNode {
                 FilterOperation::ReplaceLowerAmplitudesFd{value, threshold} => {
                     let sample_rate = *chunk.metadata().sample_rate() as f32;
                     let chunk_duration = *chunk.duration_samples() as f32;
-                    let threshold = (threshold / (chunk_duration / sample_rate)) as usize;
+                    let threshold = (threshold / (sample_rate / chunk_duration)) as usize;
                     if threshold < (chunk_duration / 2.0) as usize {
                         if i < threshold {
                             Complex32::from_f32(value).unwrap() * s.norm()
@@ -76,7 +76,7 @@ impl FilterNode {
                 FilterOperation::ReplaceHigherAmplitudesFd{value, threshold} => {
                     let sample_rate = *chunk.metadata().sample_rate() as f32;
                     let chunk_duration = *chunk.duration_samples() as f32;
-                    let threshold = (threshold / (chunk_duration / sample_rate)) as usize;
+                    let threshold = (threshold / (sample_rate / chunk_duration)) as usize;
                     if threshold < (chunk_duration / 2.0) as usize {
                         if i < threshold {
                             s.clone()

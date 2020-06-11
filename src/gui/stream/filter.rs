@@ -2,12 +2,12 @@ use super::*;
 use crate::audio::stream::{filter::*, node::NodeTrait};
 use imgui::*;
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 enum OpHighLow {
     High,
     Low,
 }
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 enum OpDomain {
     Time,
     Freq,
@@ -63,7 +63,7 @@ impl FilterNode {
                 let mut op_d = match self.op() {
                     ReplaceLowerAmplitudesFd { value, threshold } => OpDomain::Freq,
                     ReplaceHigherAmplitudesFd { value, threshold } => OpDomain::Freq,
-                    _ => OpDomain::Freq,
+                    _ => OpDomain::Time,
                 };
                 let (mut threshold, mut value) = match self.op() {
                     ReplaceHigherAmplitudesFd { threshold, value } => (*threshold, *value),
