@@ -94,6 +94,7 @@ pub enum Node {
     FourierTransform(FourierTransform),
     Arithmetic(ArithmeticNode),
     Filter(FilterNode),
+    PhaseVocoder(PhaseVocoder),
 }
 
 #[derive(Debug, Clone)]

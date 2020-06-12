@@ -155,6 +155,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                     make_node_menu!("Arithmetic", Node::Arithmetic(ArithmeticNode::new(ArithmeticOperation::Log)));
                     make_node_menu!("Filter", Node::Filter(FilterNode::new(FilterOperation::ReplaceLowerAmplitudesFd{value: 0.0, threshold: 100.0})));
                     make_node_menu!("Monitor", Node::Identity(IdentityNode::new("Monitor".to_string())));
+                    make_node_menu!("Phase Vocoder", Node::PhaseVocoder(PhaseVocoder::new(1.0)));
                 });
             });
             Window::new(im_str!("I/O Monitor"))

@@ -29,6 +29,9 @@ impl Node {
             Node::Filter(node) => {
                 node.render(ui, node_editor_state);
             }
+            Node::PhaseVocoder(node) => {
+                node.render(ui, node_editor_state);
+            }
         }
     }
 }
