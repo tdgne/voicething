@@ -12,6 +12,7 @@ pub enum ArithmeticOperation {
     Exp,
     Reciprocal,
     Inverse,
+    Abs,
 }
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
@@ -62,6 +63,7 @@ impl ArithmeticNode {
             ArithmeticOperation::Exp => s.exp(),
             ArithmeticOperation::Reciprocal => 1.0 / s,
             ArithmeticOperation::Inverse => -s,
+            ArithmeticOperation::Abs => Complex32::from_f32(s.norm()).unwrap(),
         })
         .collect::<Vec<_>>();
         match &chunk {

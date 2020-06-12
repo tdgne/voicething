@@ -41,6 +41,7 @@ impl ArithmeticNode {
             ArithmeticOperation::Exp => "Exp",
             ArithmeticOperation::Reciprocal => "Reciprocal",
             ArithmeticOperation::Inverse => "Inverse",
+            ArithmeticOperation::Abs => "Abs",
         }
     }
 
@@ -68,6 +69,7 @@ impl ArithmeticNode {
                     self.op_mut(),
                     ArithmeticOperation::Inverse,
                 );
+                ui.radio_button(im_str!("Abs"), self.op_mut(), ArithmeticOperation::Abs);
             });
     }
 }
