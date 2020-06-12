@@ -51,8 +51,8 @@ impl PhaseVocoder {
         for c in 0..channels {
             let duration = samples[c].len();
             for i in 0..duration/2 {
-                let unscaled_index = (i as f32 / self.rate).round();
-                scaled[c].push(samples[c][i])
+                let unscaled_index = (i as f32 / self.rate).round() as usize;
+                scaled[c].push(samples[c][unscaled_index])
             }
             for i in 0..duration/2 {
                 let mirrored_value = scaled[c][duration/2-i-1];
@@ -63,7 +63,7 @@ impl PhaseVocoder {
             SampleChunk::Real(_) => chunk,
             SampleChunk::Complex(_) => {
                 let new_chunk = GenericSampleChunk::new(
-                    samples,
+                    scaled,
                     chunk.metadata().clone(),
                     chunk.duration_samples().clone(),
                     chunk.window_info().clone(),
