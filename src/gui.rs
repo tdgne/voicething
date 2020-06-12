@@ -216,6 +216,17 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                             .thickness(2.0)
                             .build();
                     }
+                    if let Some(start) = node_editor_state.right_dragged() {
+                        let start_pos = node_editor_state.output_pos(&start).unwrap();
+                        let start_pos = [start_pos[0] + win_pos[0], start_pos[1] + win_pos[1]];
+                        let end_pos = ui.io().mouse_pos;
+                        // let end_pos = [end_pos[0] + win_pos[0], end_pos[1] + win_pos[1]];
+                        draw_list
+                            .add_line(start_pos.clone(), end_pos.clone(), (0.5, 0.5, 0.5, 0.5))
+                            .thickness(2.0)
+                            .build();
+
+                    }
                 });
         });
     }

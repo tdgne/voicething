@@ -41,6 +41,7 @@ pub trait InputHandler: NodeTrait {
         ui.set_cursor_screen_pos(screen_pos);
         let clicked = ui.invisible_button(&im_str!("{:?}", self.id()), size);
         let hovered = ui.is_item_hovered();
+        let double_clicked = hovered && ui.is_mouse_double_clicked(MouseButton::Left);
 
         // left drag
         let this_left_dragged = state.left_dragged() == Some(self.id());
@@ -62,11 +63,10 @@ pub trait InputHandler: NodeTrait {
             }
         }
 
-        let truly_clicked = clicked && !this_left_dragged;
-        if truly_clicked {
+        if double_clicked {
             *state.window_opened_mut(&self.id()) = true;
         }
 
-        truly_clicked
+        double_clicked
     }
 }

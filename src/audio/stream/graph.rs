@@ -286,9 +286,35 @@ impl Graph {
             }
         }
         self.edges.insert(*from_id, *to_id);
-        self.add_output(&from_node_id);
-        self.add_input(&to_node_id);
+        if self.empty_outputs(&from_node_id) == 0 {
+            self.add_output(&from_node_id);
+        }
+        if self.empty_inputs(&to_node_id) == 0 {
+            self.add_input(&to_node_id);
+        }
         Ok(())
+    }
+
+    pub fn empty_outputs(&self, node_id: &NodeId) -> usize {
+        self.node(node_id)
+            .unwrap()
+            .lock()
+            .unwrap()
+            .outputs()
+            .iter()
+            .filter(|p| p.tx.is_none())
+            .count()
+    }
+
+    pub fn empty_inputs(&self, node_id: &NodeId) -> usize {
+        self.node(node_id)
+            .unwrap()
+            .lock()
+            .unwrap()
+            .inputs()
+            .iter()
+            .filter(|p| p.rx.is_none())
+            .count()
     }
 
     pub fn disconnect_ports(
