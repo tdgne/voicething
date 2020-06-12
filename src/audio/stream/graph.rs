@@ -1,7 +1,7 @@
 use super::identity::*;
 use super::node::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::error::Error;
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
@@ -188,28 +188,55 @@ impl Graph {
         Ok(id)
     }
 
-    fn bfs_run_once(&self, node: Arc<Mutex<Node>>) -> Result<(), Box<dyn Error>> {
-        let mut q = VecDeque::new();
-        q.push_back(node);
-        while !q.is_empty() {
-            let node = q.pop_front().unwrap();
-            node.lock().unwrap().run_once();
-            for output_port in node.lock().unwrap().outputs() {
-                if let Some(other_end_port_id) = self.edges.get(&output_port.id()) {
-                    let other_end_node_id =
-                        self.input_port_node_map.get(&other_end_port_id).unwrap();
-                    q.push_back(self.node(&other_end_node_id)?);
-                }
+    fn node_ids_without_inputs(&self) -> Vec<NodeId> {
+        let mut s = Vec::new();
+        for node in self.nodes.values() {
+            let mut has_no_input_edges =
+                node.lock().unwrap().inputs().iter().fold(true, |acc, p| {
+                    acc && !self.edge_with_input_exists(p.id())
+                });
+            if has_no_input_edges {
+                s.push(node.lock().unwrap().id());
             }
         }
-        Ok(())
+        s
+    }
+
+    fn edge_with_input_exists(&self, id: InputPortId) -> bool {
+        self.edges.values().find(|v| **v == id).is_some()
     }
 
     pub fn run_once(&self) -> Result<(), Box<dyn Error>> {
-        let input = self.input_node()?;
-        // TODO: think of a wiser way
-        for _ in 0..self.nodes.len() {
-            self.bfs_run_once(input.clone())?;
+        // topological sort
+        let mut s = self.node_ids_without_inputs();
+        let mut l = Vec::new();
+        let mut removed_edges = HashSet::new();
+        while s.len() > 0 {
+            let n = s.pop().unwrap();
+            l.push(n);
+            let n_node = self.node(&n).unwrap();
+            let n_node = n_node.lock().unwrap();
+            for (e, m) in n_node.outputs().iter().flat_map(|p| {
+                p.input_id
+                    .map(|id| (id, self.input_port_node_map.get(&id).unwrap()))
+            }) {
+                removed_edges.insert(e);
+                let mut m_has_no_inputs = true;
+                let m_node = self.node(m).unwrap();
+                let m_node = m_node.lock().unwrap();
+                for e in m_node.inputs().iter().map(|p| p.id()) {
+                    if !removed_edges.contains(&e) && self.edge_with_input_exists(e) {
+                        m_has_no_inputs = false;
+                    }
+                }
+                if m_has_no_inputs {
+                    s.push(*m);
+                }
+            }
+        }
+
+        for n in l.iter() {
+            self.node(n).unwrap().lock().unwrap().run_once();
         }
         Ok(())
     }

@@ -63,11 +63,11 @@ impl FilterNode {
                     let threshold = (threshold / (sample_rate / chunk_duration)) as usize;
                     if threshold < (chunk_duration / 2.0) as usize {
                         if i < threshold {
-                            Complex32::from_f32(value).unwrap() * s.norm()
+                            Complex32::from_f32(value).unwrap() * s
                         } else if i < chunk_duration as usize - threshold {
                             s.clone()
                         } else {
-                            Complex32::from_f32(value).unwrap() * s.norm()
+                            Complex32::from_f32(value).unwrap() * s
                         }
                     } else {
                         s.clone()
@@ -81,7 +81,7 @@ impl FilterNode {
                         if i < threshold {
                             s.clone()
                         } else if i < chunk_duration as usize - threshold {
-                            Complex32::from_f32(value).unwrap() * s.norm()
+                            Complex32::from_f32(value).unwrap() * s
                         } else {
                             s.clone()
                         }
@@ -93,11 +93,11 @@ impl FilterNode {
                     let chunk_duration = *chunk.duration_samples();
                     if threshold < chunk_duration / 2 {
                         if i < threshold {
-                            Complex32::from_f32(value).unwrap() * s.norm()
+                            Complex32::from_f32(value).unwrap() * s
                         } else if i < chunk_duration as usize - threshold {
                             s.clone()
                         } else {
-                            Complex32::from_f32(value).unwrap() * s.norm()
+                            Complex32::from_f32(value).unwrap() * s
                         }
                     } else {
                         s.clone()
@@ -110,7 +110,7 @@ impl FilterNode {
                         if i < threshold {
                             s.clone()
                         } else if i < chunk_duration as usize - threshold {
-                            Complex32::from_f32(value).unwrap() * s.norm()
+                            Complex32::from_f32(value).unwrap() * s
                         } else {
                             s.clone()
                         }

@@ -61,7 +61,7 @@ impl ArithmeticNode {
             ArithmeticOperation::Multiply(c) => s * c,
             ArithmeticOperation::Log => s.ln(),
             ArithmeticOperation::Exp => s.exp(),
-            ArithmeticOperation::Reciprocal => 1.0 / s,
+            ArithmeticOperation::Reciprocal => s.finv(),
             ArithmeticOperation::Inverse => -s,
             ArithmeticOperation::Abs => Complex32::from_f32(s.norm()).unwrap(),
         })
