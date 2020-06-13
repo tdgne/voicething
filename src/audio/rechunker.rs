@@ -103,11 +103,18 @@ impl Rechunker {
     pub fn feed_chunk(&mut self, chunk: SampleChunk) {
         let chunk = format_chunk_sample_rate(chunk, self.out_sample_rate);
         let chunk = format_chunk_channel(chunk, self.out_channels);
-        let mut chunk = match chunk {
-            SampleChunk::Real(chunk) => chunk,
-            _ => panic!("Incompatible input"),
+        match chunk {
+            SampleChunk::Real(chunk) => {
+                if chunk.window_info().is_some() {
+                    eprintln!("input is windowed {}: {}", file!(), line!());
+                } else {
+                    self.buffer.append(&mut chunk.flattened_samples().into());
+                }
+            },
+            _ => {
+                eprintln!("incompatible input {}: {}", file!(), line!());
+            }
         };
-        self.buffer.append(&mut chunk.flattened_samples().into());
     }
 
     pub fn pull_samples(&mut self, n: usize) -> Option<Vec<f32>> {

@@ -37,16 +37,20 @@ impl PhaseVocoder {
         &mut self.rate
     }
 
-    pub fn process_chunk(&self, chunk: SampleChunk) -> SampleChunk {
+    pub fn process_chunk(&self, chunk: SampleChunk) -> Option<SampleChunk> {
         let channels = *chunk.metadata().channels();
+        let mut incompatible = false;
         let samples = (0..channels).map(|c| match &chunk {
-            SampleChunk::Real(chunk) => chunk
-                .samples(c)
-                .iter()
-                .map(|s| Complex32::from_f32(*s).unwrap())
-                .collect::<Vec<_>>(),
+            SampleChunk::Real(chunk) => {
+                eprintln!("incompatible input {}: {}", file!(), line!());
+                incompatible = true;
+                vec![]
+            },
             SampleChunk::Complex(chunk) => chunk.samples(c).to_vec(),
         }).collect::<Vec<_>>();
+        if incompatible {
+            return None;
+        }
         let mut scaled = vec![vec![]; channels];
         for c in 0..channels {
             let duration = samples[c].len();
@@ -59,18 +63,13 @@ impl PhaseVocoder {
                 scaled[c].push(mirrored_value.conj());
             }
         }
-        match &chunk {
-            SampleChunk::Real(_) => chunk,
-            SampleChunk::Complex(_) => {
-                let new_chunk = GenericSampleChunk::new(
-                    scaled,
-                    chunk.metadata().clone(),
-                    chunk.duration_samples().clone(),
-                    chunk.window_info().clone(),
-                );
-                SampleChunk::Complex(new_chunk)
-            }
-        }
+        let new_chunk = GenericSampleChunk::new(
+            scaled,
+            chunk.metadata().clone(),
+            chunk.duration_samples().clone(),
+            chunk.window_info().clone(),
+        );
+        Some(SampleChunk::Complex(new_chunk))
     }
 }
 
@@ -83,9 +82,10 @@ impl NodeTrait for PhaseVocoder {
             return;
         }
         while let Some(chunk) = self.inputs()[0].try_recv().ok() {
-            let chunk = self.process_chunk(chunk);
-            for output in self.outputs().iter() {
-                let result = output.try_send(chunk.clone());
+            if let Some(chunk) = self.process_chunk(chunk) {
+                for output in self.outputs().iter() {
+                    let result = output.try_send(chunk.clone());
+                }
             }
         }
     }

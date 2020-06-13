@@ -39,9 +39,10 @@ impl NodeTrait for PsolaNode {
             return;
         }
         while let Some(chunk) = self.inputs()[0].try_recv().ok() {
-            let chunk = self.process_chunk(chunk);
-            for output in self.outputs().iter() {
-                let _ = output.try_send(chunk.clone());
+            if let Some(chunk) = self.process_chunk(chunk) {
+                for output in self.outputs().iter() {
+                    let _ = output.try_send(chunk.clone());
+                }
             }
         }
     }
@@ -186,10 +187,13 @@ impl PsolaNode {
         }
     }
 
-    fn process_chunk(&mut self, chunk: SampleChunk) -> SampleChunk {
+    fn process_chunk(&mut self, chunk: SampleChunk) -> Option<SampleChunk> {
         let chunk = match chunk {
             SampleChunk::Real(chunk) => chunk,
-            _ => panic!("Incompatible input"),
+            _ => {
+                eprintln!("incompatible input {}: {}", file!(), line!());
+                return None;
+            }
         };
         let channels = *chunk.metadata().channels();
         while self.psola_info.len() < channels {
@@ -210,6 +214,6 @@ impl PsolaNode {
             chunk.window_info().clone(),
         ));
         self.psola_info = info;
-        out_chunk
+        Some(out_chunk)
     }
 }

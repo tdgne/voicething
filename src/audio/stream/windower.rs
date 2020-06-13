@@ -53,8 +53,17 @@ impl Windower {
 
     pub fn process_chunk(&mut self, chunk: SampleChunk) -> Vec<SampleChunk> {
         let chunk = match chunk {
-            SampleChunk::Real(chunk) => chunk,
-            _ => panic!("incompatible input"),
+            SampleChunk::Real(chunk) => {
+                if chunk.window_info().is_some() {
+                    eprintln!("already windowed {}: {}", file!(), line!());
+                    return vec![];
+                }
+                chunk
+            },
+            _ => {
+                eprintln!("incompatible input {}: {}", file!(), line!());
+                return vec![];
+            },
         };
         for c in 0..*chunk.metadata().channels() {
             if self.buffer.len() <= c {
