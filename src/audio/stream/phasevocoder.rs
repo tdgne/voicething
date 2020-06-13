@@ -52,7 +52,7 @@ impl PhaseVocoder {
 
         let mut incompatible = false;
         let samples = (0..channels).map(|c| match &chunk {
-            SampleChunk::Real(chunk) => {
+            SampleChunk::Real(_) => {
                 eprintln!("incompatible input {}: {}", file!(), line!());
                 incompatible = true;
                 vec![]
@@ -66,10 +66,14 @@ impl PhaseVocoder {
         for c in 0..channels {
             let duration = samples[c].len();
             for i in 0..duration {
+                let mut prev_unwrapped_phase = self.prev_unwrapped_phases[c][i];
+                if prev_unwrapped_phase.is_nan() {
+                    prev_unwrapped_phase = 0.0;
+                }
                 let pi = 3.141592;
                 let phase = samples[c][i].arg() % (2.0 * pi);
-                let prev_phase = self.prev_unwrapped_phases[c][i] % (2.0 * pi);
-                let unwrapped_phase = self.prev_unwrapped_phases[c][i] + phase - prev_phase + if phase - prev_phase < -pi {
+                let prev_phase = prev_unwrapped_phase % (2.0 * pi);
+                let unwrapped_phase = prev_unwrapped_phase + phase - prev_phase + if phase - prev_phase < -pi {
                     2.0 * pi
                 } else if phase - prev_phase > pi {
                     - 2.0 * pi
