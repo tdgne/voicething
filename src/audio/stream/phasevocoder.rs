@@ -10,6 +10,7 @@ pub struct PhaseVocoder {
     io: NodeIo,
     id: NodeId,
     rate: f32,
+    prev_unwrapped_phases: Vec<Vec<f32>>,
 }
 
 impl HasNodeIo for PhaseVocoder {
@@ -27,6 +28,7 @@ impl PhaseVocoder {
             io: NodeIo::new(),
             id: NodeId::new(),
             rate,
+            prev_unwrapped_phases: vec![],
         }
     }
 
@@ -37,8 +39,17 @@ impl PhaseVocoder {
         &mut self.rate
     }
 
-    pub fn process_chunk(&self, chunk: SampleChunk) -> Option<SampleChunk> {
+    pub fn process_chunk(&mut self, chunk: SampleChunk) -> Option<SampleChunk> {
         let channels = *chunk.metadata().channels();
+        while self.prev_unwrapped_phases.len() < channels {
+            self.prev_unwrapped_phases.push(vec![]);
+        }
+        for p in self.prev_unwrapped_phases.iter_mut() {
+            while p.len() < *chunk.duration_samples() {
+                p.push(0.0);
+            }
+        }
+
         let mut incompatible = false;
         let samples = (0..channels).map(|c| match &chunk {
             SampleChunk::Real(chunk) => {
@@ -51,26 +62,47 @@ impl PhaseVocoder {
         if incompatible {
             return None;
         }
+        let mut unwrapped_phases = vec![vec![]; channels];
+        for c in 0..channels {
+            let duration = samples[c].len();
+            for i in 0..duration {
+                let pi = 3.141592;
+                let phase = samples[c][i].arg() % (2.0 * pi);
+                let prev_phase = self.prev_unwrapped_phases[c][i] % (2.0 * pi);
+                let unwrapped_phase = self.prev_unwrapped_phases[c][i] + phase - prev_phase + if phase - prev_phase < -pi {
+                    2.0 * pi
+                } else if phase - prev_phase > pi {
+                    - 2.0 * pi
+                } else {
+                    0.0
+                };
+                unwrapped_phases[c].push(unwrapped_phase);
+            }
+        }
+
         let mut scaled = vec![vec![]; channels];
         for c in 0..channels {
             let duration = samples[c].len();
             for i in 0..duration/2 {
                 let unscaled_index = (i as f32 / self.rate).ceil() as usize;
                 if unscaled_index < duration/2 {
-                    scaled[c].push(samples[c][unscaled_index]);
+                    scaled[c].push(Complex32::from_polar(&samples[c][unscaled_index].norm(), &(self.rate * unwrapped_phases[c][unscaled_index])));
                 } else {
                     scaled[c].push(Complex32::zero());
                 }
             }
-            for i in (duration/2..duration).rev() {
+            for i in duration/2..duration {
                 let unscaled_index = duration - ((duration - i - 1) as f32 / self.rate).ceil() as usize - 1;
                 if unscaled_index >= duration/2 {
-                    scaled[c].push(samples[c][unscaled_index]);
+                    scaled[c].push(Complex32::from_polar(&samples[c][unscaled_index].norm(), &(self.rate * unwrapped_phases[c][unscaled_index])));
                 } else {
                     scaled[c].push(Complex32::zero());
                 }
             }
         }
+
+        self.prev_unwrapped_phases = unwrapped_phases;
+
         let new_chunk = GenericSampleChunk::new(
             scaled,
             chunk.metadata().clone(),

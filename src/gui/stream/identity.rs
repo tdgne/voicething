@@ -57,7 +57,7 @@ impl IdentityNode {
             .position(mouse_pos, Condition::Once)
             .build(&ui, || {
                 ui.plot_lines(im_str!(""), &amplitudes)
-                    .scale_max(10.0)
+                    .scale_max(1.0)
                     .graph_size([400.0, 300.0])
                     .build();
             });
