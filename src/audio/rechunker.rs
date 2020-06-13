@@ -101,15 +101,15 @@ fn format_chunk_sample_rate_generic<S: Sample>(
 
 impl Rechunker {
     pub fn feed_chunk(&mut self, chunk: SampleChunk) {
+        if chunk.window_info().is_some() {
+            eprintln!("input is windowed {}: {}", file!(), line!());
+            return;
+        }
         let chunk = format_chunk_sample_rate(chunk, self.out_sample_rate);
         let chunk = format_chunk_channel(chunk, self.out_channels);
         match chunk {
             SampleChunk::Real(chunk) => {
-                if chunk.window_info().is_some() {
-                    eprintln!("input is windowed {}: {}", file!(), line!());
-                } else {
-                    self.buffer.append(&mut chunk.flattened_samples().into());
-                }
+                self.buffer.append(&mut chunk.flattened_samples().into());
             },
             _ => {
                 eprintln!("incompatible input {}: {}", file!(), line!());
