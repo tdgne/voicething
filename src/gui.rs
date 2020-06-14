@@ -157,6 +157,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                     make_node_menu!("Monitor", Node::Identity(IdentityNode::new("Monitor".to_string())));
                     make_node_menu!("Phase Vocoder", Node::PhaseVocoder(PhaseVocoder::new(1.0)));
                     make_node_menu!("Period Replicator", Node::PeriodReplicator(PeriodReplicator::new()));
+                    make_node_menu!("Formant Shifter", Node::FormantShifter(FormantShifter::new()));
                 });
             });
             Window::new(im_str!("I/O Monitor"))

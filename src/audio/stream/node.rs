@@ -96,6 +96,7 @@ pub enum Node {
     Filter(FilterNode),
     PhaseVocoder(PhaseVocoder),
     PeriodReplicator(PeriodReplicator),
+    FormantShifter(FormantShifter),
 }
 
 #[derive(Debug, Clone)]

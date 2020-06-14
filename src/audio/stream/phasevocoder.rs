@@ -10,6 +10,7 @@ pub struct PhaseVocoder {
     io: NodeIo,
     id: NodeId,
     rate: f32,
+    #[serde(skip)]
     prev_unwrapped_phases: Vec<Vec<f32>>,
 }
 

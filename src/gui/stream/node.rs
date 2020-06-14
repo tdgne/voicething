@@ -35,6 +35,9 @@ impl Node {
             Node::PeriodReplicator(node) => {
                 node.render(ui, node_editor_state);
             }
+            Node::FormantShifter(node) => {
+                node.render(ui, node_editor_state);
+            }
         }
     }
 }
