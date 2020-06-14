@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Getters, Serialize, Deserialize, Debug, Clone)]
 pub struct Shift {
-    from: f32,
-    to: f32,
+    pub from: f32,
+    pub to: f32,
 }
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
@@ -18,6 +18,12 @@ pub struct FormantShifter {
     shifts: Vec<Shift>,
     #[serde(skip)]
     prev_unwrapped_phases: Vec<Vec<f32>>,
+    #[serde(skip)]
+    prev_envelope: Vec<f32>,
+    #[serde(skip)]
+    prev_delta_f: f32,
+    #[serde(skip)]
+    prev_duration: Option<usize>,
 }
 
 impl HasNodeIo for FormantShifter {
@@ -36,6 +42,9 @@ impl FormantShifter {
             id: NodeId::new(),
             prev_unwrapped_phases: vec![],
             shifts: vec![],
+            prev_envelope: vec![],
+            prev_delta_f: 1.0,
+            prev_duration: None,
         }
     }
 
@@ -44,6 +53,17 @@ impl FormantShifter {
     }
     pub fn shifts_mut(&mut self) -> &mut Vec<Shift> {
         &mut self.shifts
+    }
+
+    pub fn prev_envelope(&self) -> &[f32] {
+        &self.prev_envelope
+    }
+    pub fn prev_delta_f(&self) -> f32 {
+        self.prev_delta_f
+    }
+
+    pub fn prev_duration(&self) -> Option<usize> {
+        self.prev_duration
     }
 
     pub fn process_chunk(&mut self, chunk: SampleChunk) -> Option<SampleChunk> {
@@ -71,6 +91,7 @@ impl FormantShifter {
         if incompatible {
             return None;
         }
+
         let mut unwrapped_phases = vec![vec![]; channels];
         for c in 0..channels {
             let duration = samples[c].len();
@@ -94,11 +115,15 @@ impl FormantShifter {
             }
         }
 
+        self.prev_envelope = samples[0].iter().map(|s| s.norm()).collect::<Vec<_>>();
+        let duration = *chunk.duration_samples();
+        let d_f = *chunk.metadata().sample_rate() as f32 / duration as f32;
+        self.prev_delta_f = d_f;
+        self.prev_duration = Some(*chunk.duration_samples());
+
         let mut scaled = vec![vec![]; channels];
         for c in 0..channels {
-            let duration = samples[c].len();
             for i in 0..duration / 2 {
-                let d_f = *chunk.metadata().sample_rate() as f32 / duration as f32;
                 let to_freq = i as f32 * d_f;
                 let shifts = self.closest_shift_triplet_by_to_freq(to_freq);
                 let from_freq = if to_freq == shifts[1].to {
@@ -137,6 +162,12 @@ impl FormantShifter {
         Some(SampleChunk::Complex(new_chunk))
     }
 
+    pub fn add_shift(&mut self, shift: Shift) {
+        self.shifts.push(shift);
+        self.shifts
+            .sort_by(|a, b| a.from.partial_cmp(&b.from).unwrap());
+    }
+
     fn closest_shift_triplet_by_to_freq(&self, f: f32) -> Vec<Shift> {
         let prepend = Shift { from: 0.0, to: 0.0 };
         let append = Shift {
@@ -153,13 +184,7 @@ impl FormantShifter {
         };
         let mut closest_i = None;
         let mut closest_to_freq: Option<f32> = None;
-        for (i, shift) in self
-            .shifts
-            .iter()
-            .enumerate()
-            .skip(1)
-            .take(self.shifts.len())
-        {
+        for (i, shift) in shifts.iter().enumerate().skip(1).take(self.shifts.len()) {
             if let Some(mut closest_to_freq) = closest_to_freq {
                 if (closest_to_freq - f).abs() > (shift.to - f).abs() {
                     closest_to_freq = shift.to;
@@ -170,7 +195,7 @@ impl FormantShifter {
                 closest_i = Some(i);
             }
         }
-        self.shifts[(closest_i.unwrap() - 1)..(closest_i.unwrap() + 2)].to_vec()
+        shifts[(closest_i.unwrap() - 1)..(closest_i.unwrap() + 2)].to_vec()
     }
 }
 
