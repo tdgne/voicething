@@ -32,6 +32,9 @@ impl Node {
             Node::PhaseVocoder(node) => {
                 node.render(ui, node_editor_state);
             }
+            Node::PeriodReplicator(node) => {
+                node.render(ui, node_editor_state);
+            }
         }
     }
 }

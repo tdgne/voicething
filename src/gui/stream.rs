@@ -9,6 +9,7 @@ pub mod port;
 pub mod psola;
 pub mod windower;
 pub mod phasevocoder;
+pub mod replicator;
 pub use aggregate::*;
 pub use arithmetic::*;
 pub use dewindower::*;
@@ -20,6 +21,7 @@ pub use port::*;
 pub use psola::*;
 pub use windower::*;
 pub use phasevocoder::*;
+pub use replicator::*;
 
 use std::collections::HashMap;
 use crate::audio::stream::node::*;

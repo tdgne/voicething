@@ -95,6 +95,7 @@ pub enum Node {
     Arithmetic(ArithmeticNode),
     Filter(FilterNode),
     PhaseVocoder(PhaseVocoder),
+    PeriodReplicator(PeriodReplicator),
 }
 
 #[derive(Debug, Clone)]

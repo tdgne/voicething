@@ -66,7 +66,7 @@ impl PsolaNode {
         &mut self.ratio
     }
 
-    fn period(
+    pub fn period(
         data: &[f32],
         period_lims: (usize, usize),
         minimum_autocorrelation: f32,
