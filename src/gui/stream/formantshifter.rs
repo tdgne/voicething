@@ -34,10 +34,22 @@ impl FormantShifter {
                     .graph_size([w, h])
                     .build();
                 let pos_x = mouse_pos[0] - cursor_pos[0];
-                let delta = ui.mouse_drag_delta_with_threshold(MouseButton::Right, 0.0)[0];
                 let d_f = self.prev_delta_f();
                 let chunk_duration = self.prev_duration().unwrap_or(1024) as f32;
                 let hovered = ui.is_item_hovered();
+                let delta = ui.mouse_drag_delta_with_threshold(MouseButton::Left, 0.0)[0];
+                if delta != 0.0 && ui.is_mouse_down(MouseButton::Left) && hovered {
+                    let drag_to = pos_x / w * chunk_duration * d_f;
+                    for shift in self.shifts_mut().iter_mut() {
+                        if (shift.from - drag_to).abs() < 4.0 / w * chunk_duration * d_f {
+                            shift.from = drag_to;
+                        }
+                        if (shift.to - drag_to).abs() < 4.0 / w * chunk_duration * d_f {
+                            shift.to = drag_to;
+                        }
+                    }
+                }
+                let delta = ui.mouse_drag_delta_with_threshold(MouseButton::Right, 0.0)[0];
                 if delta != 0.0 && ui.is_mouse_released(MouseButton::Right) && hovered {
                     let from = (pos_x - delta) / w * chunk_duration * d_f;
                     let to = pos_x / w * chunk_duration * d_f;

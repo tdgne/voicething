@@ -5,11 +5,17 @@ use rustfft::num_complex::Complex32;
 use rustfft::num_traits::*;
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum PitchShiftConfig {
+    Rate(f32),
+    Kumaraswamy(f32, f32),
+}
+
 #[derive(Getters, Serialize, Deserialize, Debug)]
 pub struct PhaseVocoder {
     io: NodeIo,
     id: NodeId,
-    rate: f32,
+    config: PitchShiftConfig,
     #[serde(skip)]
     prev_unwrapped_phases: Vec<Vec<f32>>,
 }
@@ -28,16 +34,16 @@ impl PhaseVocoder {
         Self {
             io: NodeIo::new(),
             id: NodeId::new(),
-            rate,
+            config: PitchShiftConfig::Rate(1.0),
             prev_unwrapped_phases: vec![],
         }
     }
 
-    pub fn rate(&self) -> &f32 {
-        &self.rate
+    pub fn config(&self) -> &PitchShiftConfig {
+        &self.config
     }
-    pub fn rate_mut(&mut self) -> &mut f32 {
-        &mut self.rate
+    pub fn config_mut(&mut self) -> &mut PitchShiftConfig {
+        &mut self.config
     }
 
     pub fn process_chunk(&mut self, chunk: SampleChunk) -> Option<SampleChunk> {
@@ -52,14 +58,16 @@ impl PhaseVocoder {
         }
 
         let mut incompatible = false;
-        let samples = (0..channels).map(|c| match &chunk {
-            SampleChunk::Real(_) => {
-                eprintln!("incompatible input {}: {}", file!(), line!());
-                incompatible = true;
-                vec![]
-            },
-            SampleChunk::Complex(chunk) => chunk.samples(c).to_vec(),
-        }).collect::<Vec<_>>();
+        let samples = (0..channels)
+            .map(|c| match &chunk {
+                SampleChunk::Real(_) => {
+                    eprintln!("incompatible input {}: {}", file!(), line!());
+                    incompatible = true;
+                    vec![]
+                }
+                SampleChunk::Complex(chunk) => chunk.samples(c).to_vec(),
+            })
+            .collect::<Vec<_>>();
         if incompatible {
             return None;
         }
@@ -74,13 +82,14 @@ impl PhaseVocoder {
                 let pi = 3.141592;
                 let phase = samples[c][i].arg() % (2.0 * pi);
                 let prev_phase = prev_unwrapped_phase % (2.0 * pi);
-                let unwrapped_phase = prev_unwrapped_phase + phase - prev_phase + if phase - prev_phase < -pi {
-                    2.0 * pi
-                } else if phase - prev_phase > pi {
-                    - 2.0 * pi
-                } else {
-                    0.0
-                };
+                let unwrapped_phase = prev_unwrapped_phase + phase - prev_phase
+                    + if phase - prev_phase < -pi {
+                        2.0 * pi
+                    } else if phase - prev_phase > pi {
+                        -2.0 * pi
+                    } else {
+                        0.0
+                    };
                 unwrapped_phases[c].push(unwrapped_phase);
             }
         }
@@ -88,20 +97,75 @@ impl PhaseVocoder {
         let mut scaled = vec![vec![]; channels];
         for c in 0..channels {
             let duration = samples[c].len();
-            for i in 0..duration/2 {
-                let unscaled_index = (i as f32 / self.rate).ceil() as usize;
-                if unscaled_index < duration/2 {
-                    scaled[c].push(Complex32::from_polar(&samples[c][unscaled_index].norm(), &(self.rate * unwrapped_phases[c][unscaled_index])));
-                } else {
-                    scaled[c].push(Complex32::zero());
+            match self.config {
+                PitchShiftConfig::Rate(rate) => {
+                    for i in 0..duration / 2 {
+                        let unscaled_index = (i as f32 / rate).ceil() as usize;
+                        if unscaled_index < duration / 2 {
+                            scaled[c].push(Complex32::from_polar(
+                                &samples[c][unscaled_index].norm(),
+                                &(rate * unwrapped_phases[c][unscaled_index]),
+                            ));
+                        } else {
+                            scaled[c].push(Complex32::zero());
+                        }
+                    }
+                    for i in duration / 2..duration {
+                        let unscaled_index =
+                            duration - ((duration - i - 1) as f32 / rate).ceil() as usize - 1;
+                        if unscaled_index >= duration / 2 {
+                            scaled[c].push(Complex32::from_polar(
+                                &samples[c][unscaled_index].norm(),
+                                &(rate * unwrapped_phases[c][unscaled_index]),
+                            ));
+                        } else {
+                            scaled[c].push(Complex32::zero());
+                        }
+                    }
                 }
-            }
-            for i in duration/2..duration {
-                let unscaled_index = duration - ((duration - i - 1) as f32 / self.rate).ceil() as usize - 1;
-                if unscaled_index >= duration/2 {
-                    scaled[c].push(Complex32::from_polar(&samples[c][unscaled_index].norm(), &(self.rate * unwrapped_phases[c][unscaled_index])));
-                } else {
-                    scaled[c].push(Complex32::zero());
+                PitchShiftConfig::Kumaraswamy(a, b) => {
+                    let kumaraswamy_inv = |u: f32| 1.0 - (1.0 - u.pow(1.0 / a)).pow(1.0 / b);
+                    for i in 0..duration / 2 {
+                        let unscaled_index = (kumaraswamy_inv(i as f32 / (duration / 2) as f32)
+                            * (duration / 2) as f32)
+                            .ceil() as usize;
+                        let rate = i as f32 / unscaled_index as f32;
+                        let rate = if rate.is_nan() {
+                            1.0
+                        } else {
+                            rate
+                        };
+                        if unscaled_index < duration / 2 {
+                            scaled[c].push(Complex32::from_polar(
+                                &samples[c][unscaled_index].norm(),
+                                &(rate * unwrapped_phases[c][unscaled_index]),
+                            ));
+                        } else {
+                            scaled[c].push(Complex32::zero());
+                        }
+                    }
+                    for i in duration / 2..duration {
+                        let unscaled_index = duration
+                            - (kumaraswamy_inv((duration - i - 1) as f32 / (duration / 2) as f32)
+                                * (duration / 2) as f32)
+                                .ceil() as usize
+                            - 1;
+                        let rate =
+                            (duration - i) as f32 / (duration - unscaled_index) as f32;
+                        let rate = if rate.is_nan() {
+                            1.0
+                        } else {
+                            rate
+                        };
+                        if unscaled_index >= duration / 2 {
+                            scaled[c].push(Complex32::from_polar(
+                                &samples[c][unscaled_index].norm(),
+                                &(rate * unwrapped_phases[c][unscaled_index]),
+                            ));
+                        } else {
+                            scaled[c].push(Complex32::zero());
+                        }
+                    }
                 }
             }
         }
