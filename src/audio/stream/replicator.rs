@@ -11,6 +11,8 @@ pub struct PeriodReplicator {
     wave: Option<Vec<f32>>,
     #[serde(skip)]
     last_chunk: Option<SampleChunk>,
+    #[serde(skip)]
+    phase: usize,
     id: NodeId,
 }
 
@@ -48,6 +50,7 @@ impl PeriodReplicator {
             id: NodeId::new(),
             wave: None,
             last_chunk: None,
+            phase: 0,
         }
     }
 
@@ -103,9 +106,12 @@ impl PeriodReplicator {
             let samples = wave
                 .iter()
                 .cycle()
+                .skip(self.phase)
                 .take(*chunk.duration_samples())
                 .cloned()
                 .collect::<Vec<_>>();
+            self.phase += *chunk.duration_samples() % wave.len();
+            self.phase %= wave.len();
             Some(SampleChunk::Real(GenericSampleChunk::new(
                 vec![samples; *chunk.metadata().channels()],
                 chunk.metadata().clone(),
