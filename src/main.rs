@@ -1,7 +1,6 @@
 #![feature(vec_remove_item)]
 
 mod audio;
-mod config;
 mod gui;
 
 use std::sync::mpsc::sync_channel;

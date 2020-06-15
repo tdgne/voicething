@@ -10,7 +10,6 @@ use std::thread;
 
 use crate::audio::common::{AudioMetadata, DataChunk, GenericDataChunk};
 use crate::audio::rechunker::*;
-use crate::config;
 
 #[derive(Clone)]
 pub struct StreamInfo {
@@ -266,37 +265,6 @@ pub enum Input {
 pub enum Output {
     Default,
     Device(String),
-}
-
-// TODO: use wither
-#[derive(Getters, Setters, Clone)]
-#[getset(get = "pub", set = "pub")]
-pub struct AudioConfig {
-    input: Option<Input>,
-    output: Option<Output>,
-    chunk_size: usize,
-}
-
-impl AudioConfig {
-    pub fn from_command_line_options(
-        options: config::CommandLineOptions,
-        default_input: Option<Input>,
-        default_output: Option<Output>,
-        chunk_size: usize,
-    ) -> Self {
-        let input = options
-            .clone()
-            .input_file()
-            .as_ref()
-            .map(|file| Input::File(file.to_string()))
-            .or(default_input);
-        let output = default_output;
-        Self {
-            input,
-            output,
-            chunk_size,
-        }
-    }
 }
 
 // cpal-related initialization needs to be called on a different thread
