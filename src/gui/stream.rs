@@ -1,35 +1,35 @@
 pub mod aggregate;
 pub mod arithmetic;
 pub mod dewindower;
-pub mod ft;
 pub mod filter;
+pub mod formantshifter;
+pub mod ft;
 pub mod identity;
 pub mod node;
+pub mod phasevocoder;
 pub mod port;
 pub mod psola;
-pub mod windower;
-pub mod phasevocoder;
 pub mod replicator;
-pub mod formantshifter;
+pub mod windower;
 pub use aggregate::*;
 pub use arithmetic::*;
 pub use dewindower::*;
-pub use ft::*;
 pub use filter::*;
+pub use formantshifter::*;
+pub use ft::*;
 pub use identity::*;
 pub use node::*;
+pub use phasevocoder::*;
 pub use port::*;
 pub use psola::*;
-pub use windower::*;
-pub use phasevocoder::*;
 pub use replicator::*;
-pub use formantshifter::*;
+pub use windower::*;
 
-use std::collections::HashMap;
-use crate::audio::stream::node::*;
 use crate::audio::stream::graph::Graph;
+use crate::audio::stream::node::*;
 use imgui::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub type ConnectRequest = (OutputPortId, InputPortId);
@@ -120,5 +120,3 @@ impl NodeEditorState {
         self.window_opened.get_mut(id).unwrap()
     }
 }
-
-

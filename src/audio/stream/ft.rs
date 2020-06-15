@@ -46,10 +46,10 @@ impl FourierTransform {
         &mut self.real_output
     }
 
-    pub fn process_chunk(&self, chunk: SampleChunk) -> SampleChunk {
+    pub fn process_chunk(&self, chunk: DataChunk) -> DataChunk {
         let channels = *chunk.metadata().channels();
         let mut samples = match &chunk {
-            SampleChunk::Real(chunk) => (0..channels)
+            DataChunk::Real(chunk) => (0..channels)
                 .map(|c| {
                     chunk
                         .samples(c)
@@ -58,13 +58,13 @@ impl FourierTransform {
                         .collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>(),
-            SampleChunk::Complex(chunk) => (0..channels)
+            DataChunk::Complex(chunk) => (0..channels)
                 .map(|c| chunk.samples(c).to_vec())
                 .collect::<Vec<_>>(),
         };
         let mut transformed = samples.clone();
         let mut planner = FFTplanner::new(self.inverse);
-        let fft = planner.plan_fft(*chunk.duration_samples());
+        let fft = planner.plan_fft(*chunk.duration());
         for c in 0..channels {
             fft.process(&mut samples[c], &mut transformed[c]);
             let l = transformed[c].len();
@@ -74,20 +74,20 @@ impl FourierTransform {
             }
         }
         if self.real_output {
-            SampleChunk::Real(GenericSampleChunk::new(
+            DataChunk::Real(GenericDataChunk::new(
                 transformed
                     .iter()
                     .map(|c| c.iter().map(|s| s.re).collect::<Vec<_>>())
                     .collect::<Vec<_>>(),
                 chunk.metadata().clone(),
-                *chunk.duration_samples(),
+                *chunk.duration(),
                 chunk.window_info().clone(),
             ))
         } else {
-            SampleChunk::Complex(GenericSampleChunk::new(
+            DataChunk::Complex(GenericDataChunk::new(
                 transformed,
                 chunk.metadata().clone(),
-                *chunk.duration_samples(),
+                *chunk.duration(),
                 chunk.window_info().clone(),
             ))
         }

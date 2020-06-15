@@ -30,7 +30,7 @@ impl ArithmeticNode {
     pub fn render_control_window(&mut self, ui: &Ui, state: &mut NodeEditorState, focused: bool) {
         let opened = state.window_opened(&self.id()).clone();
         if !opened {
-            return
+            return;
         }
         let mouse_pos = ui.io().mouse_pos;
         Window::new(&im_str!("Arithmetic Node {:?}", self.id()))

@@ -46,13 +46,13 @@ impl PhaseVocoder {
         &mut self.config
     }
 
-    pub fn process_chunk(&mut self, chunk: SampleChunk) -> Option<SampleChunk> {
+    pub fn process_chunk(&mut self, chunk: DataChunk) -> Option<DataChunk> {
         let channels = *chunk.metadata().channels();
         while self.prev_unwrapped_phases.len() < channels {
             self.prev_unwrapped_phases.push(vec![]);
         }
         for p in self.prev_unwrapped_phases.iter_mut() {
-            while p.len() < *chunk.duration_samples() {
+            while p.len() < *chunk.duration() {
                 p.push(0.0);
             }
         }
@@ -60,12 +60,12 @@ impl PhaseVocoder {
         let mut incompatible = false;
         let samples = (0..channels)
             .map(|c| match &chunk {
-                SampleChunk::Real(_) => {
+                DataChunk::Real(_) => {
                     eprintln!("incompatible input {}: {}", file!(), line!());
                     incompatible = true;
                     vec![]
                 }
-                SampleChunk::Complex(chunk) => chunk.samples(c).to_vec(),
+                DataChunk::Complex(chunk) => chunk.samples(c).to_vec(),
             })
             .collect::<Vec<_>>();
         if incompatible {
@@ -130,11 +130,7 @@ impl PhaseVocoder {
                             * (duration / 2) as f32)
                             .ceil() as usize;
                         let rate = i as f32 / unscaled_index as f32;
-                        let rate = if rate.is_nan() {
-                            1.0
-                        } else {
-                            rate
-                        };
+                        let rate = if rate.is_nan() { 1.0 } else { rate };
                         if unscaled_index < duration / 2 {
                             scaled[c].push(Complex32::from_polar(
                                 &samples[c][unscaled_index].norm(),
@@ -150,13 +146,8 @@ impl PhaseVocoder {
                                 * (duration / 2) as f32)
                                 .ceil() as usize
                             - 1;
-                        let rate =
-                            (duration - i) as f32 / (duration - unscaled_index) as f32;
-                        let rate = if rate.is_nan() {
-                            1.0
-                        } else {
-                            rate
-                        };
+                        let rate = (duration - i) as f32 / (duration - unscaled_index) as f32;
+                        let rate = if rate.is_nan() { 1.0 } else { rate };
                         if unscaled_index >= duration / 2 {
                             scaled[c].push(Complex32::from_polar(
                                 &samples[c][unscaled_index].norm(),
@@ -172,13 +163,13 @@ impl PhaseVocoder {
 
         self.prev_unwrapped_phases = unwrapped_phases;
 
-        let new_chunk = GenericSampleChunk::new(
+        let new_chunk = GenericDataChunk::new(
             scaled,
             chunk.metadata().clone(),
-            chunk.duration_samples().clone(),
+            chunk.duration().clone(),
             chunk.window_info().clone(),
         );
-        Some(SampleChunk::Complex(new_chunk))
+        Some(DataChunk::Complex(new_chunk))
     }
 }
 

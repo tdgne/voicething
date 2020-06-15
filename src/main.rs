@@ -4,7 +4,7 @@ mod audio;
 mod config;
 mod gui;
 
-use std::sync::mpsc::{sync_channel};
+use std::sync::mpsc::sync_channel;
 
 fn main() {
     let (tx_in, rx_in) = sync_channel(16);

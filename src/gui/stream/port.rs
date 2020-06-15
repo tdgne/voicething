@@ -23,7 +23,12 @@ impl InputPort {
         }
     }
 
-    fn handle_input(&self, ui: &Ui, state: &mut NodeEditorState, size: [f32; 2]) -> Option<ConnectRequest> {
+    fn handle_input(
+        &self,
+        ui: &Ui,
+        state: &mut NodeEditorState,
+        size: [f32; 2],
+    ) -> Option<ConnectRequest> {
         let win_pos = ui.cursor_screen_pos();
         let pos = state.input_pos(&self.id()).unwrap();
         let screen_pos = [pos[0] + win_pos[0], pos[1] + win_pos[1]];
@@ -64,7 +69,7 @@ impl OutputPort {
                     .rounding(4.0)
                     .filled(true)
                     .build();
-                }
+            }
             self.handle_input(ui, state, [w, h]);
         }
     }

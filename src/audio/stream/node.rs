@@ -1,4 +1,4 @@
-use crate::audio::common::{SampleChunk};
+use crate::audio::common::DataChunk;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{Receiver, SyncSender};
 use uuid::Uuid;
@@ -150,7 +150,7 @@ impl OutputPortId {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InputPort {
     #[serde(skip)]
-    pub rx: Option<Receiver<SampleChunk>>,
+    pub rx: Option<Receiver<DataChunk>>,
     id: InputPortId,
     node_id: NodeId,
     pub output_id: Option<OutputPortId>,
@@ -170,12 +170,10 @@ impl InputPort {
         self.id
     }
 
-    pub fn try_recv(&self) -> Result<SampleChunk, Box::<dyn std::error::Error>> {
+    pub fn try_recv(&self) -> Result<DataChunk, Box<dyn std::error::Error>> {
         match &self.rx {
-            Some(rx) => {
-                Ok(rx.try_recv()?)
-            },
-            None => Err(NoSenderReceiverError)?
+            Some(rx) => Ok(rx.try_recv()?),
+            None => Err(NoSenderReceiverError)?,
         }
     }
 }
@@ -183,7 +181,7 @@ impl InputPort {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OutputPort {
     #[serde(skip)]
-    pub tx: Option<SyncSender<SampleChunk>>,
+    pub tx: Option<SyncSender<DataChunk>>,
     id: OutputPortId,
     node_id: NodeId,
     pub input_id: Option<InputPortId>,
@@ -203,14 +201,10 @@ impl OutputPort {
         self.id
     }
 
-    pub fn try_send(&self, chunk: SampleChunk) -> Result<(), Box::<dyn std::error::Error>> {
+    pub fn try_send(&self, chunk: DataChunk) -> Result<(), Box<dyn std::error::Error>> {
         match &self.tx {
-            Some(tx) => {
-                Ok(tx.try_send(chunk)?)
-            },
-            None => Err(NoSenderReceiverError)?
+            Some(tx) => Ok(tx.try_send(chunk)?),
+            None => Err(NoSenderReceiverError)?,
         }
     }
 }
-
-

@@ -47,14 +47,14 @@ impl ArithmeticNode {
         &mut self.op
     }
 
-    pub fn process_chunk(&self, chunk: SampleChunk) -> SampleChunk {
+    pub fn process_chunk(&self, chunk: DataChunk) -> DataChunk {
         let samples = match &chunk {
-            SampleChunk::Real(chunk) => chunk
-                .flattened_samples()
+            DataChunk::Real(chunk) => chunk
+                .flattened_data()
                 .iter()
                 .map(|s| Complex32::from_f32(*s).unwrap())
                 .collect::<Vec<_>>(),
-            SampleChunk::Complex(chunk) => chunk.flattened_samples(),
+            DataChunk::Complex(chunk) => chunk.flattened_data(),
         }
         .iter()
         .map(|s| match self.op {
@@ -67,21 +67,21 @@ impl ArithmeticNode {
         })
         .collect::<Vec<_>>();
         match &chunk {
-            SampleChunk::Real(_) => {
-                let mut new_chunk = GenericSampleChunk::from_flat_samples(
+            DataChunk::Real(_) => {
+                let mut new_chunk = GenericDataChunk::from_flat_sata(
                     &samples.iter().map(|s| s.re).collect::<Vec<_>>(),
                     chunk.metadata().clone(),
-                ).unwrap();
+                )
+                .unwrap();
                 new_chunk.set_window_info(chunk.window_info().clone());
-                SampleChunk::Real(new_chunk)
+                DataChunk::Real(new_chunk)
             }
-            SampleChunk::Complex(_) => {
-                let mut new_chunk = GenericSampleChunk::from_flat_samples(
-                    &samples,
-                    chunk.metadata().clone(),
-                ).unwrap();
+            DataChunk::Complex(_) => {
+                let mut new_chunk =
+                    GenericDataChunk::from_flat_sata(&samples, chunk.metadata().clone())
+                        .unwrap();
                 new_chunk.set_window_info(chunk.window_info().clone());
-                SampleChunk::Complex(new_chunk)
+                DataChunk::Complex(new_chunk)
             }
         }
     }

@@ -1,12 +1,16 @@
 use cpal;
 use cpal::traits::*;
 use getset::{Getters, Setters};
-use std::sync::{mpsc, mpsc::{SyncSender, Receiver}, Arc, Mutex};
+use std::sync::{
+    mpsc,
+    mpsc::{Receiver, SyncSender},
+    Arc, Mutex,
+};
 use std::thread;
 
-use crate::audio::common::{AudioMetadata, SampleChunk, GenericSampleChunk};
-use crate::config;
+use crate::audio::common::{AudioMetadata, DataChunk, GenericDataChunk};
 use crate::audio::rechunker::*;
+use crate::config;
 
 #[derive(Clone)]
 pub struct StreamInfo {
@@ -20,8 +24,8 @@ pub struct Host {
     event_loop: Arc<cpal::EventLoop>,
     input_stream: Arc<Mutex<Option<StreamInfo>>>,
     output_stream: Arc<Mutex<Option<StreamInfo>>>,
-    sender: Arc<Mutex<Option<SyncSender<SampleChunk>>>>,
-    receiver: Arc<Mutex<Option<Receiver<SampleChunk>>>>,
+    sender: Arc<Mutex<Option<SyncSender<DataChunk>>>>,
+    receiver: Arc<Mutex<Option<Receiver<DataChunk>>>>,
     rechunker: Arc<Mutex<Option<Rechunker>>>,
 }
 
@@ -41,11 +45,19 @@ impl Host {
     }
 
     pub fn current_input_device_name(&self) -> Option<String> {
-        self.input_stream.lock().unwrap().as_ref().map(|s| s.device_name.clone())
+        self.input_stream
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|s| s.device_name.clone())
     }
 
     pub fn current_output_device_name(&self) -> Option<String> {
-        self.output_stream.lock().unwrap().as_ref().map(|s| s.device_name.clone())
+        self.output_stream
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|s| s.device_name.clone())
     }
 
     pub fn input_device_names(&self) -> Vec<String> {
@@ -138,11 +150,11 @@ impl Host {
         *self.output_stream.lock().unwrap() = Some(stream_info);
     }
 
-    pub fn set_sender(&self, sender: Option<SyncSender<SampleChunk>>) {
+    pub fn set_sender(&self, sender: Option<SyncSender<DataChunk>>) {
         *self.sender.lock().unwrap() = sender;
     }
 
-    pub fn set_receiver(&self, receiver: Option<Receiver<SampleChunk>>) {
+    pub fn set_receiver(&self, receiver: Option<Receiver<DataChunk>>) {
         *self.receiver.lock().unwrap() = receiver;
     }
 
@@ -216,27 +228,24 @@ impl Host {
     }
 }
 
-fn chunk_from_buffer(
-    format: cpal::Format,
-    buffer: &cpal::UnknownTypeInputBuffer,
-) -> SampleChunk {
+fn chunk_from_buffer(format: cpal::Format, buffer: &cpal::UnknownTypeInputBuffer) -> DataChunk {
     let metadata = AudioMetadata::new(format.channels as usize, format.sample_rate.0 as usize);
     match buffer {
         cpal::UnknownTypeInputBuffer::U16(buffer) => unimplemented!(),
         cpal::UnknownTypeInputBuffer::I16(buffer) => unimplemented!(),
         cpal::UnknownTypeInputBuffer::F32(buffer) => {
-            SampleChunk::Real(GenericSampleChunk::from_flat_samples(buffer, metadata).unwrap())
+            DataChunk::Real(GenericDataChunk::from_flat_sata(buffer, metadata).unwrap())
         }
     }
 }
 
-fn write_chunk_to_buffer(chunk: SampleChunk, buffer: &mut cpal::UnknownTypeOutputBuffer) {
+fn write_chunk_to_buffer(chunk: DataChunk, buffer: &mut cpal::UnknownTypeOutputBuffer) {
     match buffer {
         cpal::UnknownTypeOutputBuffer::U16(buffer) => unimplemented!(),
         cpal::UnknownTypeOutputBuffer::I16(buffer) => unimplemented!(),
         cpal::UnknownTypeOutputBuffer::F32(buffer) => {
             let samples = match chunk {
-                SampleChunk::Real(chunk) => chunk.flattened_samples(),
+                DataChunk::Real(chunk) => chunk.flattened_data(),
                 _ => panic!("Incompatible input"),
             };
             for (i, b) in buffer.iter_mut().enumerate() {

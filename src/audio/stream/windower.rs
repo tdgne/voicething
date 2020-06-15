@@ -24,7 +24,6 @@ impl HasNodeIo for Windower {
     }
 }
 
-
 impl Windower {
     pub fn new(window_function: WindowFunction, window_size: usize, delay: usize) -> Self {
         Self {
@@ -51,19 +50,19 @@ impl Windower {
         0.5 - 0.5 * (2.0 * 3.141592 * x).cos()
     }
 
-    pub fn process_chunk(&mut self, chunk: SampleChunk) -> Vec<SampleChunk> {
+    pub fn process_chunk(&mut self, chunk: DataChunk) -> Vec<DataChunk> {
         let chunk = match chunk {
-            SampleChunk::Real(chunk) => {
+            DataChunk::Real(chunk) => {
                 if chunk.window_info().is_some() {
                     eprintln!("already windowed {}: {}", file!(), line!());
                     return vec![];
                 }
                 chunk
-            },
+            }
             _ => {
                 eprintln!("incompatible input {}: {}", file!(), line!());
                 return vec![];
-            },
+            }
         };
         for c in 0..*chunk.metadata().channels() {
             if self.buffer.len() <= c {
@@ -75,7 +74,7 @@ impl Windower {
         }
         let mut windowed_chunks = vec![];
         while self.buffer[0].len() >= self.window_size {
-            let mut windowed_chunk = GenericSampleChunk::from_flat_samples(
+            let mut windowed_chunk = GenericDataChunk::from_flat_sata(
                 &vec![0.0; self.buffer.len() * self.window_size],
                 chunk.metadata().clone(),
             )
@@ -106,7 +105,7 @@ impl Windower {
         }
         windowed_chunks
             .iter()
-            .map(|c| SampleChunk::Real(c.clone()))
+            .map(|c| DataChunk::Real(c.clone()))
             .collect::<Vec<_>>()
     }
 }
@@ -135,28 +134,25 @@ mod test {
     use crate::audio::*;
     #[test]
     fn window_dewindow() {
-        let c = SampleChunk::Real(
-            GenericSampleChunk::from_flat_samples(
-                &vec![1.0; 1024 * 4],
-                AudioMetadata::new(2, 44100),
-            )
-            .unwrap(),
+        let c = DataChunk::Real(
+            GenericDataChunk::from_flat_sata(&vec![1.0; 1024 * 4], AudioMetadata::new(2, 44100))
+                .unwrap(),
         );
         let mut w = Windower::new(WindowFunction::Hanning, 300, 128);
         let mut dw = Dewindower::new(821);
         for n in w.process_chunk(c).into_iter() {
             let nc = match n.clone() {
-                SampleChunk::Real(n) => n,
+                DataChunk::Real(n) => n,
                 _ => panic!(),
             };
-            assert_eq!(*nc.duration_samples(), 300);
+            assert_eq!(*nc.duration(), 300);
             assert_ne!(nc.samples(0)[1], 0.0);
             for n in dw.process_chunk(n).iter() {
                 let nc = match n {
-                    SampleChunk::Real(n) => n,
+                    DataChunk::Real(n) => n,
                     _ => panic!(),
                 };
-                assert_eq!(*nc.duration_samples(), 821);
+                assert_eq!(*nc.duration(), 821);
                 assert_ne!(nc.samples(0)[1], 0.0);
             }
         }

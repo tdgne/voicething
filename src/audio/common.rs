@@ -1,8 +1,8 @@
 use derive_new::new;
 use getset::{Getters, Setters};
-use rustfft::num_traits::{FromPrimitive, Num, NumAssignOps, NumCast, NumOps};
 use rustfft::num_complex::Complex32;
-use serde::{Serialize, Deserialize};
+use rustfft::num_traits::{FromPrimitive, Num, NumAssignOps, NumCast, NumOps};
+use serde::{Deserialize, Serialize};
 
 #[derive(Getters, Clone, Debug, new)]
 #[getset(get = "pub")]
@@ -35,37 +35,37 @@ impl Sample for f32 {}
 impl Sample for Complex32 {}
 
 #[derive(Getters, Setters, Clone, Debug, new)]
-pub struct GenericSampleChunk<S: Sample> {
+pub struct GenericDataChunk<S: Sample> {
     samples: Vec<Vec<S>>,
     #[getset(get = "pub")]
     metadata: AudioMetadata,
     #[getset(get = "pub")]
-    duration_samples: usize,
+    duration: usize,
     #[getset(get = "pub", set = "pub")]
     window_info: Option<WindowInfo>,
 }
 
-impl<S: Sample> GenericSampleChunk<S> {
-    pub fn from_flat_samples(
-        flat_samples: &[S],
+impl<S: Sample> GenericDataChunk<S> {
+    pub fn from_flat_sata(
+        flat_sata: &[S],
         metadata: AudioMetadata,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let len = flat_samples.len();
+        let len = flat_sata.len();
         let channels = *metadata.channels();
-        let duration_samples = len / channels;
-        if duration_samples * channels != len {
+        let duration = len / channels;
+        if duration * channels != len {
             return Err(Box::new(SampleLengthError));
         }
         let mut samples = vec![vec![]; channels];
-        for i in 0..duration_samples {
+        for i in 0..duration {
             for channel in 0..channels {
-                samples[channel].push(flat_samples[i * channels + channel].clone());
+                samples[channel].push(flat_sata[i * channels + channel].clone());
             }
         }
         Ok(Self {
             samples,
             metadata,
-            duration_samples,
+            duration,
             window_info: None,
         })
     }
@@ -74,7 +74,7 @@ impl<S: Sample> GenericSampleChunk<S> {
         for channel in self.samples.iter_mut() {
             channel.truncate(duration);
         }
-        self.duration_samples = duration;
+        self.duration = duration;
     }
 
     pub fn samples(&self, channel: usize) -> &[S] {
@@ -85,13 +85,13 @@ impl<S: Sample> GenericSampleChunk<S> {
         &mut self.samples[channel]
     }
 
-    pub fn flattened_samples(&self) -> Vec<S> {
+    pub fn flattened_data(&self) -> Vec<S> {
         let channels = *self.metadata().channels();
         if channels == 1 {
             return self.samples[0].clone();
         }
         let mut flattened = vec![];
-        for i in 0..self.duration_samples {
+        for i in 0..self.duration {
             for channel in 0..channels {
                 flattened.push(self.samples(channel)[i].clone());
             }
@@ -101,12 +101,12 @@ impl<S: Sample> GenericSampleChunk<S> {
 }
 
 #[derive(Clone, Debug)]
-pub enum SampleChunk {
-    Real(GenericSampleChunk<f32>),
-    Complex(GenericSampleChunk<Complex32>),
+pub enum DataChunk {
+    Real(GenericDataChunk<f32>),
+    Complex(GenericDataChunk<Complex32>),
 }
 
-impl SampleChunk {
+impl DataChunk {
     pub fn metadata(&self) -> &AudioMetadata {
         match self {
             Self::Real(c) => c.metadata(),
@@ -114,10 +114,10 @@ impl SampleChunk {
         }
     }
 
-    pub fn duration_samples(&self) -> &usize {
+    pub fn duration(&self) -> &usize {
         match self {
-            Self::Real(c) => c.duration_samples(),
-            Self::Complex(c) => c.duration_samples(),
+            Self::Real(c) => c.duration(),
+            Self::Complex(c) => c.duration(),
         }
     }
 
@@ -133,7 +133,7 @@ impl SampleChunk {
 pub enum WindowFunction {
     Hanning,
     Triangular,
-    Rectangular
+    Rectangular,
 }
 
 #[derive(Getters, Clone, Debug, new)]
@@ -143,4 +143,3 @@ pub struct WindowInfo {
     #[getset(get = "pub")]
     delay: usize,
 }
-

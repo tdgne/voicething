@@ -1,8 +1,8 @@
-use crate::audio::stream::node::NodeTrait;
-use crate::audio::stream::dewindower::Dewindower;
 use super::NodeEditorState;
-use imgui::*;
 use super::*;
+use crate::audio::stream::dewindower::Dewindower;
+use crate::audio::stream::node::NodeTrait;
+use imgui::*;
 
 impl InputHandler for Dewindower {}
 
@@ -13,6 +13,5 @@ impl Dewindower {
         self.handle_input(ui, state, size);
     }
 
-    pub fn render_control_window(&mut self, ui: &Ui) {
-    }
+    pub fn render_control_window(&mut self, ui: &Ui) {}
 }

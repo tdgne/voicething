@@ -1,7 +1,7 @@
-use crate::audio::stream::{node::NodeTrait, aggregate::*};
 use super::NodeEditorState;
-use imgui::*;
 use super::*;
+use crate::audio::stream::{aggregate::*, node::NodeTrait};
+use imgui::*;
 
 impl InputHandler for AggregateNode {}
 
@@ -24,7 +24,7 @@ impl AggregateNode {
     pub fn render_control_window(&mut self, ui: &Ui, state: &mut NodeEditorState, focused: bool) {
         let opened = state.window_opened(&self.id()).clone();
         if !opened {
-            return
+            return;
         }
         let mouse_pos = ui.io().mouse_pos;
         Window::new(&im_str!("Aggregate {:?}", self.id()))
@@ -34,7 +34,11 @@ impl AggregateNode {
             .position(mouse_pos, Condition::Once)
             .build(&ui, || {
                 ui.radio_button(im_str!("Sum"), self.setting_mut(), AggregateSetting::Sum);
-                ui.radio_button(im_str!("Product"), self.setting_mut(), AggregateSetting::Product);
+                ui.radio_button(
+                    im_str!("Product"),
+                    self.setting_mut(),
+                    AggregateSetting::Product,
+                );
             });
     }
 }

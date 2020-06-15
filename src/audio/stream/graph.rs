@@ -191,10 +191,12 @@ impl Graph {
     fn node_ids_without_inputs(&self) -> Vec<NodeId> {
         let mut s = Vec::new();
         for node in self.nodes.values() {
-            let mut has_no_input_edges =
-                node.lock().unwrap().inputs().iter().fold(true, |acc, p| {
-                    acc && !self.edge_with_input_exists(p.id())
-                });
+            let mut has_no_input_edges = node
+                .lock()
+                .unwrap()
+                .inputs()
+                .iter()
+                .fold(true, |acc, p| acc && !self.edge_with_input_exists(p.id()));
             if has_no_input_edges {
                 s.push(node.lock().unwrap().id());
             }

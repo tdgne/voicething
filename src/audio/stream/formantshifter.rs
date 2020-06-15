@@ -66,13 +66,13 @@ impl FormantShifter {
         self.prev_duration
     }
 
-    pub fn process_chunk(&mut self, chunk: SampleChunk) -> Option<SampleChunk> {
+    pub fn process_chunk(&mut self, chunk: DataChunk) -> Option<DataChunk> {
         let channels = *chunk.metadata().channels();
         while self.prev_unwrapped_phases.len() < channels {
             self.prev_unwrapped_phases.push(vec![]);
         }
         for p in self.prev_unwrapped_phases.iter_mut() {
-            while p.len() < *chunk.duration_samples() {
+            while p.len() < *chunk.duration() {
                 p.push(0.0);
             }
         }
@@ -80,12 +80,12 @@ impl FormantShifter {
         let mut incompatible = false;
         let samples = (0..channels)
             .map(|c| match &chunk {
-                SampleChunk::Real(_) => {
+                DataChunk::Real(_) => {
                     eprintln!("incompatible input {}: {}", file!(), line!());
                     incompatible = true;
                     vec![]
                 }
-                SampleChunk::Complex(chunk) => chunk.samples(c).to_vec(),
+                DataChunk::Complex(chunk) => chunk.samples(c).to_vec(),
             })
             .collect::<Vec<_>>();
         if incompatible {
@@ -116,10 +116,10 @@ impl FormantShifter {
         }
 
         self.prev_envelope = samples[0].iter().map(|s| s.norm()).collect::<Vec<_>>();
-        let duration = *chunk.duration_samples();
+        let duration = *chunk.duration();
         let d_f = *chunk.metadata().sample_rate() as f32 / duration as f32;
         self.prev_delta_f = d_f;
-        self.prev_duration = Some(*chunk.duration_samples());
+        self.prev_duration = Some(*chunk.duration());
 
         let mut scaled = vec![vec![]; channels];
         for c in 0..channels {
@@ -153,13 +153,13 @@ impl FormantShifter {
 
         self.prev_unwrapped_phases = unwrapped_phases;
 
-        let new_chunk = GenericSampleChunk::new(
+        let new_chunk = GenericDataChunk::new(
             scaled,
             chunk.metadata().clone(),
-            chunk.duration_samples().clone(),
+            chunk.duration().clone(),
             chunk.window_info().clone(),
         );
-        Some(SampleChunk::Complex(new_chunk))
+        Some(DataChunk::Complex(new_chunk))
     }
 
     pub fn add_shift(&mut self, shift: Shift) {

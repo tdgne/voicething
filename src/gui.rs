@@ -1,9 +1,9 @@
 use imgui::*;
 use serde_json;
+use std::io::{self, Read};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::io::{self, Read};
 
 mod stream;
 mod support;
@@ -14,7 +14,7 @@ use crate::audio::stream::node::NodeTrait;
 use crate::audio::stream::*;
 use stream::*;
 
-pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSender<SampleChunk>) {
+pub fn main_loop(host: audio::Host, input: Receiver<DataChunk>, output: SyncSender<DataChunk>) {
     let system = support::init("voicething");
 
     let rechunker = Arc::new(Mutex::new(Rechunker::new(2, 44100)));
@@ -26,7 +26,6 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
         }
     });
 
-
     let mut buffer = String::new();
     io::stdin().read_to_string(&mut buffer);
     let mut node_editor_state: NodeEditorState = match serde_json::from_str(&buffer) {
@@ -35,7 +34,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
             let mut g = Graph::default();
             let mut input_node = g.input_node().unwrap();
             let input_node_id = input_node.lock().unwrap().id();
-            
+
             let mut output_node = g.output_node().unwrap();
             let output_node_id = output_node.lock().unwrap().id();
 
@@ -79,7 +78,6 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
         (input_monitor_rx, output_monitor_rx)
     };
 
-    
     {
         let g = g.clone();
         thread::spawn(move || loop {
@@ -87,7 +85,6 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
             thread::sleep(std::time::Duration::from_millis(1));
         });
     }
-
 
     {
         let g = g.clone();
@@ -145,29 +142,56 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                                 g.add_output(&node_id).unwrap();
                                 node_editor_state.set_node_pos(node_id, default_pos);
                             }
-                        }
+                        };
                     }
                     make_node_menu!("TD-PSOLA", Node::Psola(PsolaNode::new(1.0)));
-                    make_node_menu!("Windower", Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64)));
+                    make_node_menu!(
+                        "Windower",
+                        Node::Windower(Windower::new(WindowFunction::Hanning, 512, 64))
+                    );
                     make_node_menu!("Dewindower", Node::Dewindower(Dewindower::new(1024)));
-                    make_node_menu!("Sum/Product", Node::Aggregate(AggregateNode::new(AggregateSetting::Sum)));
-                    make_node_menu!("DFT/IDFT", Node::FourierTransform(FourierTransform::new(false, false)));
-                    make_node_menu!("Arithmetic", Node::Arithmetic(ArithmeticNode::new(ArithmeticOperation::Log)));
-                    make_node_menu!("Filter", Node::Filter(FilterNode::new(FilterOperation::ReplaceLowerAmplitudesFd{value: 0.0, threshold: 100.0})));
-                    make_node_menu!("Monitor", Node::Identity(IdentityNode::new("Monitor".to_string())));
+                    make_node_menu!(
+                        "Sum/Product",
+                        Node::Aggregate(AggregateNode::new(AggregateSetting::Sum))
+                    );
+                    make_node_menu!(
+                        "DFT/IDFT",
+                        Node::FourierTransform(FourierTransform::new(false, false))
+                    );
+                    make_node_menu!(
+                        "Arithmetic",
+                        Node::Arithmetic(ArithmeticNode::new(ArithmeticOperation::Log))
+                    );
+                    make_node_menu!(
+                        "Filter",
+                        Node::Filter(FilterNode::new(FilterOperation::ReplaceLowerAmplitudesFd {
+                            value: 0.0,
+                            threshold: 100.0
+                        }))
+                    );
+                    make_node_menu!(
+                        "Monitor",
+                        Node::Identity(IdentityNode::new("Monitor".to_string()))
+                    );
                     make_node_menu!("Phase Vocoder", Node::PhaseVocoder(PhaseVocoder::new(1.0)));
-                    make_node_menu!("Period Replicator", Node::PeriodReplicator(PeriodReplicator::new()));
-                    make_node_menu!("Formant Shifter", Node::FormantShifter(FormantShifter::new()));
+                    make_node_menu!(
+                        "Period Replicator",
+                        Node::PeriodReplicator(PeriodReplicator::new())
+                    );
+                    make_node_menu!(
+                        "Formant Shifter",
+                        Node::FormantShifter(FormantShifter::new())
+                    );
                 });
             });
             Window::new(im_str!("I/O Monitor"))
                 .always_auto_resize(true)
                 .position([0.0, 20.0], Condition::FirstUseEver)
                 .build(&ui, || {
-                    while let Ok(SampleChunk::Real(chunk)) = input_rx.try_recv() {
+                    while let Ok(DataChunk::Real(chunk)) = input_rx.try_recv() {
                         input_amplitudes = chunk.samples(0).to_vec();
                     }
-                    while let Ok(SampleChunk::Real(chunk)) = output_rx.try_recv() {
+                    while let Ok(DataChunk::Real(chunk)) = output_rx.try_recv() {
                         output_amplitudes = chunk.samples(0).to_vec();
                     }
                     ui.plot_lines(im_str!(""), &input_amplitudes)
@@ -228,7 +252,6 @@ pub fn main_loop(host: audio::Host, input: Receiver<SampleChunk>, output: SyncSe
                             .add_line(start_pos.clone(), end_pos.clone(), (0.5, 0.5, 0.5, 0.5))
                             .thickness(2.0)
                             .build();
-
                     }
                 });
         });

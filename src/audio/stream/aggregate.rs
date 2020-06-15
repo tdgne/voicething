@@ -1,8 +1,8 @@
 use super::super::common::*;
 use super::node::*;
-use serde::{Deserialize, Serialize};
 use rustfft::num_complex::Complex32;
 use rustfft::num_traits::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AggregateNode {
@@ -43,26 +43,26 @@ impl AggregateNode {
         &mut self.setting
     }
 
-    pub fn process_chunk(&mut self, chunks: Vec<SampleChunk>) -> Option<SampleChunk> {
+    pub fn process_chunk(&mut self, chunks: Vec<DataChunk>) -> Option<DataChunk> {
         if chunks.len() == 0 {
             return None;
         }
         let is_real = chunks
             .iter()
             .map(|c| match c {
-                SampleChunk::Real(_) => true,
+                DataChunk::Real(_) => true,
                 _ => false,
             })
             .fold(true, |acc, cur| acc && cur);
         let samples = chunks
             .iter()
             .map(|c| match c {
-                SampleChunk::Real(c) => c
-                    .flattened_samples()
+                DataChunk::Real(c) => c
+                    .flattened_data()
                     .iter()
                     .map(|s| Complex32::from_f32(*s).unwrap())
                     .collect::<Vec<_>>(),
-                SampleChunk::Complex(c) => c.flattened_samples(),
+                DataChunk::Complex(c) => c.flattened_data(),
             })
             .collect::<Vec<_>>();
         let l = samples[0].len();
@@ -85,13 +85,15 @@ impl AggregateNode {
         let metadata = chunks[0].metadata().clone();
         if is_real {
             let new_samples = new_samples.iter().map(|s| s.re).collect::<Vec<_>>();
-            let mut new_chunk = GenericSampleChunk::from_flat_samples(&new_samples, metadata).unwrap();
+            let mut new_chunk =
+                GenericDataChunk::from_flat_sata(&new_samples, metadata).unwrap();
             new_chunk.set_window_info(chunks[0].window_info().clone());
-            Some(SampleChunk::Real(new_chunk))
+            Some(DataChunk::Real(new_chunk))
         } else {
-            let mut new_chunk = GenericSampleChunk::from_flat_samples(&new_samples, metadata).unwrap();
+            let mut new_chunk =
+                GenericDataChunk::from_flat_sata(&new_samples, metadata).unwrap();
             new_chunk.set_window_info(chunks[0].window_info().clone());
-            Some(SampleChunk::Complex(new_chunk))
+            Some(DataChunk::Complex(new_chunk))
         }
     }
 }
@@ -133,13 +135,18 @@ mod test {
     fn sum() {
         let setting = AggregateSetting::Sum;
         let metadata = AudioMetadata::new(2, 44100);
-        let c = vec![SampleChunk::Real(GenericSampleChunk::from_flat_samples(&vec![1.0; 2048], metadata).unwrap()); 2];
+        let c = vec![
+            DataChunk::Real(
+                GenericDataChunk::from_flat_sata(&vec![1.0; 2048], metadata).unwrap()
+            );
+            2
+        ];
         let mut n = AggregateNode::new(setting);
         n.add_input();
         n.add_input();
         let c = n.process_chunk(c).unwrap();
         match c {
-            SampleChunk::Real(c) => assert_eq!(c.samples(0)[0], 2.0),
+            DataChunk::Real(c) => assert_eq!(c.samples(0)[0], 2.0),
             _ => panic!(),
         }
     }
@@ -148,13 +155,18 @@ mod test {
     fn product() {
         let setting = AggregateSetting::Product;
         let metadata = AudioMetadata::new(2, 44100);
-        let c = vec![SampleChunk::Real(GenericSampleChunk::from_flat_samples(&vec![2.0; 2048], metadata).unwrap()); 2];
+        let c = vec![
+            DataChunk::Real(
+                GenericDataChunk::from_flat_sata(&vec![2.0; 2048], metadata).unwrap()
+            );
+            2
+        ];
         let mut n = AggregateNode::new(setting);
         n.add_input();
         n.add_input();
         let c = n.process_chunk(c).unwrap();
         match c {
-            SampleChunk::Real(c) => assert_eq!(c.samples(1)[1023], 4.0),
+            DataChunk::Real(c) => assert_eq!(c.samples(1)[1023], 4.0),
             _ => panic!(),
         }
     }

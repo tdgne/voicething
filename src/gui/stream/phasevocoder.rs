@@ -36,26 +36,25 @@ impl PhaseVocoder {
                             [30.0, 200.0],
                             std::ops::RangeInclusive::new(0.5, 2.0),
                         )
-                            .display_format(im_str!("%0.2f"))
-                            .build(&ui, rate);
-                    },
+                        .display_format(im_str!("%0.2f"))
+                        .build(&ui, rate);
+                    }
                     PitchShiftConfig::Kumaraswamy(ref mut a, ref mut b) => {
                         VerticalSlider::new(
                             im_str!("a"),
                             [30.0, 200.0],
                             std::ops::RangeInclusive::new(0.1, 5.0),
                         )
-                            .display_format(im_str!("%0.2f"))
-                            .build(&ui, a);
+                        .display_format(im_str!("%0.2f"))
+                        .build(&ui, a);
                         ui.same_line(60.0);
                         VerticalSlider::new(
                             im_str!("b"),
                             [30.0, 200.0],
                             std::ops::RangeInclusive::new(0.1, 5.0),
                         )
-                            .display_format(im_str!("%0.2f"))
-                            .build(&ui, b);
-
+                        .display_format(im_str!("%0.2f"))
+                        .build(&ui, b);
                     }
                 }
                 if ui.small_button(im_str!("switch")) {

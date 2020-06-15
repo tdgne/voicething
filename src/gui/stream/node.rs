@@ -1,6 +1,6 @@
 use super::*;
-use imgui::*;
 use crate::audio::stream::node::*;
+use imgui::*;
 
 impl Node {
     pub fn render(&mut self, ui: &Ui, node_editor_state: &mut NodeEditorState) {

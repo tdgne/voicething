@@ -46,15 +46,15 @@ impl Dewindower {
         0.5 - 0.5 * (2.0 * 3.141592 * x).cos()
     }
 
-    pub fn process_chunk(&mut self, chunk: SampleChunk) -> Vec<SampleChunk> {
+    pub fn process_chunk(&mut self, chunk: DataChunk) -> Vec<DataChunk> {
         let chunk = match chunk {
-            SampleChunk::Real(chunk) => {
+            DataChunk::Real(chunk) => {
                 if chunk.window_info().is_none() {
                     eprintln!("not windowed {}: {}", file!(), line!());
                     return vec![];
                 }
                 chunk
-            },
+            }
             _ => {
                 eprintln!("incompatible input {}: {}", file!(), line!());
                 return vec![];
@@ -68,16 +68,16 @@ impl Dewindower {
                 for _ in 0..delay {
                     self.buffer[c].push_back(0.0);
                 }
-                for i in 0..*chunk.duration_samples() {
+                for i in 0..*chunk.duration() {
                     let l = self.buffer[c].len();
-                    self.buffer[c][l - chunk.duration_samples() + i] +=
-                        chunk.samples(c)[i] * delay as f32 / *chunk.duration_samples() as f32;
+                    self.buffer[c][l - chunk.duration() + i] +=
+                        chunk.samples(c)[i] * delay as f32 / *chunk.duration() as f32;
                 }
             }
         }
         let mut dewindowed_chunks = vec![];
         while self.buffer[0].len() >= self.out_chunk_size * 2 {
-            let mut dewindowed_chunk = GenericSampleChunk::from_flat_samples(
+            let mut dewindowed_chunk = GenericDataChunk::from_flat_sata(
                 &vec![0.0; self.buffer.len() * self.out_chunk_size],
                 chunk.metadata().clone(),
             )
@@ -97,7 +97,7 @@ impl Dewindower {
         }
         dewindowed_chunks
             .iter()
-            .map(|c| SampleChunk::Real(c.clone()))
+            .map(|c| DataChunk::Real(c.clone()))
             .collect::<Vec<_>>()
     }
 }

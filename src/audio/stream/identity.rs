@@ -1,7 +1,7 @@
 use super::super::common::*;
 use super::node::*;
 use getset::Getters;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Getters, Serialize, Deserialize, Debug)]
 pub struct IdentityNode {
@@ -9,7 +9,7 @@ pub struct IdentityNode {
     name: String,
     id: NodeId,
     #[serde(skip)]
-    last_chunk: Option<SampleChunk>,
+    last_chunk: Option<DataChunk>,
 }
 
 impl HasNodeIo for IdentityNode {
@@ -21,7 +21,6 @@ impl HasNodeIo for IdentityNode {
     }
 }
 
-
 impl IdentityNode {
     pub fn new(name: String) -> Self {
         Self {
@@ -31,12 +30,12 @@ impl IdentityNode {
             last_chunk: None,
         }
     }
-    
+
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn last_chunk(&self) -> Option<&SampleChunk> {
+    pub fn last_chunk(&self) -> Option<&DataChunk> {
         self.last_chunk.as_ref()
     }
 }

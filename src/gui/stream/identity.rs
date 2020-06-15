@@ -1,6 +1,6 @@
 use super::NodeEditorState;
 use super::*;
-use crate::audio::common::SampleChunk;
+use crate::audio::common::DataChunk;
 use crate::audio::stream::{identity::IdentityNode, node::NodeTrait};
 use imgui::*;
 
@@ -22,8 +22,12 @@ impl IdentityNode {
         }
         let mouse_pos = ui.io().mouse_pos;
         let amplitudes = match self.last_chunk() {
-            Some(SampleChunk::Real(chunk)) => chunk.samples(0).to_vec(),
-            Some(SampleChunk::Complex(chunk)) => chunk.samples(0).iter().map(|s| s.norm()).collect::<Vec<_>>(),
+            Some(DataChunk::Real(chunk)) => chunk.samples(0).to_vec(),
+            Some(DataChunk::Complex(chunk)) => chunk
+                .samples(0)
+                .iter()
+                .map(|s| s.norm())
+                .collect::<Vec<_>>(),
             _ => vec![],
         };
         Window::new(&im_str!("{} {:?}", self.name(), self.id()))

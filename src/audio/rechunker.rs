@@ -7,35 +7,35 @@ pub struct Rechunker {
     out_sample_rate: usize,
 }
 
-pub fn format_chunk_channel(chunk: SampleChunk, out_channels: usize) -> SampleChunk {
+pub fn format_chunk_channel(chunk: DataChunk, out_channels: usize) -> DataChunk {
     match chunk {
-        SampleChunk::Real(chunk) => {
-            SampleChunk::Real(format_chunk_channel_generic(chunk, out_channels))
+        DataChunk::Real(chunk) => {
+            DataChunk::Real(format_chunk_channel_generic(chunk, out_channels))
         }
-        SampleChunk::Complex(chunk) => {
-            SampleChunk::Complex(format_chunk_channel_generic(chunk, out_channels))
+        DataChunk::Complex(chunk) => {
+            DataChunk::Complex(format_chunk_channel_generic(chunk, out_channels))
         }
     }
 }
 
-pub fn format_chunk_sample_rate(chunk: SampleChunk, out_sample_rate: usize) -> SampleChunk {
+pub fn format_chunk_sample_rate(chunk: DataChunk, out_sample_rate: usize) -> DataChunk {
     match chunk {
-        SampleChunk::Real(chunk) => {
-            SampleChunk::Real(format_chunk_sample_rate_generic(chunk, out_sample_rate))
+        DataChunk::Real(chunk) => {
+            DataChunk::Real(format_chunk_sample_rate_generic(chunk, out_sample_rate))
         }
-        SampleChunk::Complex(chunk) => {
-            SampleChunk::Complex(format_chunk_sample_rate_generic(chunk, out_sample_rate))
+        DataChunk::Complex(chunk) => {
+            DataChunk::Complex(format_chunk_sample_rate_generic(chunk, out_sample_rate))
         }
     }
 }
 
 fn format_chunk_channel_generic<S: Sample>(
-    chunk: GenericSampleChunk<S>,
+    chunk: GenericDataChunk<S>,
     out_channels: usize,
-) -> GenericSampleChunk<S> {
+) -> GenericDataChunk<S> {
     let out_format = AudioMetadata::new(out_channels, *chunk.metadata().sample_rate());
-    let mut out_chunk = GenericSampleChunk::from_flat_samples(
-        &vec![S::zero(); out_channels * chunk.duration_samples()],
+    let mut out_chunk = GenericDataChunk::from_flat_sata(
+        &vec![S::zero(); out_channels * chunk.duration()],
         out_format,
     )
     .unwrap();
@@ -71,17 +71,17 @@ fn format_chunk_channel_generic<S: Sample>(
 }
 
 fn format_chunk_sample_rate_generic<S: Sample>(
-    chunk: GenericSampleChunk<S>,
+    chunk: GenericDataChunk<S>,
     out_sample_rate: usize,
-) -> GenericSampleChunk<S> {
+) -> GenericDataChunk<S> {
     if out_sample_rate == *chunk.metadata().sample_rate() {
         return chunk;
     }
     let out_format = AudioMetadata::new(*chunk.metadata().channels(), out_sample_rate);
-    let out_duration = (*chunk.duration_samples() as f32 / *chunk.metadata().sample_rate() as f32
+    let out_duration = (*chunk.duration() as f32 / *chunk.metadata().sample_rate() as f32
         * out_sample_rate as f32)
         .floor() as usize;
-    let mut out_chunk = GenericSampleChunk::from_flat_samples(
+    let mut out_chunk = GenericDataChunk::from_flat_sata(
         &vec![S::zero(); chunk.metadata().channels() * out_duration],
         out_format,
     )
@@ -100,7 +100,7 @@ fn format_chunk_sample_rate_generic<S: Sample>(
 }
 
 impl Rechunker {
-    pub fn feed_chunk(&mut self, chunk: SampleChunk) {
+    pub fn feed_chunk(&mut self, chunk: DataChunk) {
         if chunk.window_info().is_some() {
             eprintln!("input is windowed {}: {}", file!(), line!());
             return;
@@ -108,9 +108,9 @@ impl Rechunker {
         let chunk = format_chunk_sample_rate(chunk, self.out_sample_rate);
         let chunk = format_chunk_channel(chunk, self.out_channels);
         match chunk {
-            SampleChunk::Real(chunk) => {
-                self.buffer.append(&mut chunk.flattened_samples().into());
-            },
+            DataChunk::Real(chunk) => {
+                self.buffer.append(&mut chunk.flattened_data().into());
+            }
             _ => {
                 eprintln!("incompatible input {}: {}", file!(), line!());
             }
@@ -128,11 +128,11 @@ impl Rechunker {
         Some(v)
     }
 
-    pub fn pull_chunk(&mut self, duration: usize) -> Option<SampleChunk> {
+    pub fn pull_chunk(&mut self, duration: usize) -> Option<DataChunk> {
         self.pull_samples(duration * self.out_channels)
             .map(|samples| {
-                SampleChunk::Real(
-                    GenericSampleChunk::from_flat_samples(
+                DataChunk::Real(
+                    GenericDataChunk::from_flat_sata(
                         &samples,
                         AudioMetadata::new(self.out_channels, self.out_sample_rate),
                     )

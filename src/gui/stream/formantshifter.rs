@@ -69,7 +69,11 @@ impl FormantShifter {
                         .thickness(1.0)
                         .build();
                     ui.get_window_draw_list()
-                        .add_line([from_pos_x, (min_y + max_y) / 2.0], [to_pos_x, (min_y + max_y) / 2.0], (0.5, 0.5, 0.5, 0.5))
+                        .add_line(
+                            [from_pos_x, (min_y + max_y) / 2.0],
+                            [to_pos_x, (min_y + max_y) / 2.0],
+                            (0.5, 0.5, 0.5, 0.5),
+                        )
                         .thickness(1.0)
                         .build();
                 }

@@ -1,8 +1,8 @@
-use crate::audio::stream::windower::Windower;
-use crate::audio::stream::node::NodeTrait;
 use super::NodeEditorState;
-use imgui::*;
 use super::*;
+use crate::audio::stream::node::NodeTrait;
+use crate::audio::stream::windower::Windower;
+use imgui::*;
 
 impl InputHandler for Windower {}
 
@@ -13,6 +13,5 @@ impl Windower {
         self.handle_input(ui, state, size);
     }
 
-    pub fn render_control_window(&mut self, ui: &Ui) {
-    }
+    pub fn render_control_window(&mut self, ui: &Ui) {}
 }

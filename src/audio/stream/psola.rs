@@ -187,9 +187,9 @@ impl PsolaNode {
         }
     }
 
-    fn process_chunk(&mut self, chunk: SampleChunk) -> Option<SampleChunk> {
+    fn process_chunk(&mut self, chunk: DataChunk) -> Option<DataChunk> {
         let chunk = match chunk {
-            SampleChunk::Real(chunk) => chunk,
+            DataChunk::Real(chunk) => chunk,
             _ => {
                 eprintln!("incompatible input {}: {}", file!(), line!());
                 return None;
@@ -207,10 +207,10 @@ impl PsolaNode {
             .zip(self.psola_info.iter())
             .map(|(c, info)| self.psola(chunk.samples(c), info))
             .unzip();
-        let out_chunk = SampleChunk::Real(GenericSampleChunk::new(
+        let out_chunk = DataChunk::Real(GenericDataChunk::new(
             samples,
             chunk.metadata().clone(),
-            *chunk.duration_samples(),
+            *chunk.duration(),
             chunk.window_info().clone(),
         ));
         self.psola_info = info;

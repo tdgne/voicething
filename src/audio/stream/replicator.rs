@@ -10,7 +10,7 @@ pub struct PeriodReplicator {
     #[serde(skip)]
     wave: Option<Vec<f32>>,
     #[serde(skip)]
-    last_chunk: Option<SampleChunk>,
+    last_chunk: Option<DataChunk>,
     #[serde(skip)]
     phase: usize,
     id: NodeId,
@@ -61,7 +61,7 @@ impl PeriodReplicator {
     pub fn grab_period(&mut self) -> bool {
         if let Some(chunk) = &self.last_chunk {
             let data = match chunk {
-                SampleChunk::Real(chunk) => chunk.samples(0),
+                DataChunk::Real(chunk) => chunk.samples(0),
                 _ => unreachable!(),
             };
             if let Some(period) = PsolaNode::period(
@@ -94,9 +94,9 @@ impl PeriodReplicator {
         }
     }
 
-    fn process_chunk(&mut self, chunk: SampleChunk) -> Option<SampleChunk> {
+    fn process_chunk(&mut self, chunk: DataChunk) -> Option<DataChunk> {
         match chunk {
-            SampleChunk::Real(_) => self.last_chunk = Some(chunk.clone()),
+            DataChunk::Real(_) => self.last_chunk = Some(chunk.clone()),
             _ => {
                 eprintln!("incompatible input {}: {}", file!(), line!());
                 return None;
@@ -107,15 +107,15 @@ impl PeriodReplicator {
                 .iter()
                 .cycle()
                 .skip(self.phase)
-                .take(*chunk.duration_samples())
+                .take(*chunk.duration())
                 .cloned()
                 .collect::<Vec<_>>();
-            self.phase += *chunk.duration_samples() % wave.len();
+            self.phase += *chunk.duration() % wave.len();
             self.phase %= wave.len();
-            Some(SampleChunk::Real(GenericSampleChunk::new(
+            Some(DataChunk::Real(GenericDataChunk::new(
                 vec![samples; *chunk.metadata().channels()],
                 chunk.metadata().clone(),
-                *chunk.duration_samples(),
+                *chunk.duration(),
                 chunk.window_info().clone(),
             )))
         } else {

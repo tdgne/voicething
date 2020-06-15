@@ -14,5 +14,3 @@ impl CommandLineOptions {
         Self::parse()
     }
 }
-
-
