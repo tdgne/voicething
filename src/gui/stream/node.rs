@@ -47,7 +47,9 @@ pub trait InputHandler: NodeTrait {
         ui.set_cursor_pos([0.0, 0.0]);
         let win_pos = ui.cursor_screen_pos();
         let pos = state.node_pos(&self.id()).unwrap().clone();
-        let (w, h) = (100.0, 20.0);
+        let text_size = ui.calc_text_size(&im_str!("{}", name), false, 1000.0);
+        let (padding_x, padding_y) = (10.0, 5.0);
+        let (w, h) = (text_size[0] + 2.0 * padding_x, text_size[1] + 2.0 * padding_y);
         {
             let draw_list = ui.get_window_draw_list();
             let pos = [pos[0] + win_pos[0], pos[1] + win_pos[1]];
@@ -56,21 +58,27 @@ pub trait InputHandler: NodeTrait {
                 .rounding(4.0)
                 .filled(true)
                 .build();
-            draw_list.add_text(pos, (0.0, 0.0, 0.0, 1.0), name);
+            draw_list.add_text([pos[0] + w / 2.0 - text_size[0] / 2.0, pos[1] + padding_y], (0.0, 0.0, 0.0, 1.0), name);
+        }
+
+        fn divide(w: f32, l: usize, i: usize) -> f32 {
+            (w / (l as f32 + 1.0)) * (i + 1) as f32
         }
 
         let mut i = 0;
+        let l = self.inputs().len();
         for input in self.inputs().iter() {
             if !(input.rx.is_some() && input.output_id.is_none()) {
-                state.set_input_pos(input.id(), [pos[0] + 10.0 * i as f32, pos[1] - 5.0]);
+                state.set_input_pos(input.id(), [pos[0] + divide(w, l, i), pos[1] - 5.0]);
                 i += 1;
             }
         }
 
         let mut i = 0;
+        let l = self.outputs().len();
         for output in self.outputs().iter() {
             if !(output.tx.is_some() && output.input_id.is_none()) {
-                state.set_output_pos(output.id(), [pos[0] + 10.0 * i as f32, pos[1] + h]);
+                state.set_output_pos(output.id(), [pos[0] + divide(w, l, i), pos[1] + h]);
                 i += 1;
             }
         }

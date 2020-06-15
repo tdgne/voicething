@@ -12,8 +12,12 @@ impl InputPort {
                 let draw_list = ui.get_window_draw_list();
                 let pos = [pos[0] + win_pos[0], pos[1] + win_pos[1]];
                 draw_list
-                    .add_rect(pos, [pos[0] + w, pos[1] + h], (1.0, 0.5, 0.5, 1.0))
-                    .rounding(4.0)
+                    .add_triangle(
+                        [pos[0] - w / 2.0, pos[1]],
+                        [pos[0] + w / 2.0, pos[1]],
+                        [pos[0], pos[1] + h],
+                        (0.95, 0.95, 1.0, 1.0),
+                    )
                     .filled(true)
                     .build();
             }
@@ -31,7 +35,7 @@ impl InputPort {
     ) -> Option<ConnectRequest> {
         let win_pos = ui.cursor_screen_pos();
         let pos = state.input_pos(&self.id()).unwrap();
-        let screen_pos = [pos[0] + win_pos[0], pos[1] + win_pos[1]];
+        let screen_pos = [pos[0] + win_pos[0] - size[0] / 2.0, pos[1] + win_pos[1]];
         ui.set_cursor_screen_pos(screen_pos);
         let clicked = ui.invisible_button(&im_str!("{:?}", self.id()), size);
         let hovered = ui.is_item_hovered();
@@ -65,8 +69,12 @@ impl OutputPort {
                 let draw_list = ui.get_window_draw_list();
                 let pos = [pos[0] + win_pos[0], pos[1] + win_pos[1]];
                 draw_list
-                    .add_rect(pos, [pos[0] + w, pos[1] + h], (0.5, 1.0, 0.5, 1.0))
-                    .rounding(4.0)
+                    .add_triangle(
+                        [pos[0] - w / 2.0, pos[1]],
+                        [pos[0] + w / 2.0, pos[1]],
+                        [pos[0], pos[1] + h],
+                        (0.95, 0.95, 1.0, 1.0),
+                    )
                     .filled(true)
                     .build();
             }
@@ -77,10 +85,13 @@ impl OutputPort {
     fn handle_input(&self, ui: &Ui, state: &mut NodeEditorState, size: [f32; 2]) {
         let win_pos = ui.cursor_screen_pos();
         let pos = state.output_pos(&self.id()).unwrap();
-        let screen_pos = [pos[0] + win_pos[0], pos[1] + win_pos[1]];
+        let screen_pos = [pos[0] + win_pos[0] - size[0] / 2.0, pos[1] + win_pos[1]];
         ui.set_cursor_screen_pos(screen_pos);
         let clicked = ui.invisible_button(&im_str!("{:?}", self.id()), size);
         let hovered = ui.is_item_hovered();
+        if hovered {
+            ui.set_mouse_cursor(Some(MouseCursor::Hand));
+        }
 
         // right drag
         let this_right_dragged = state.right_dragged() == Some(self.id());

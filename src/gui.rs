@@ -93,6 +93,7 @@ pub fn main_loop(host: audio::Host, input: Receiver<DataChunk>, output: SyncSend
         let mut input_amplitudes = vec![];
         let mut output_amplitudes = vec![];
         system.main_loop(move |_, ui| {
+            ui.set_mouse_cursor(Some(MouseCursor::Arrow));
             let current_input_device_name = host.current_input_device_name();
             let current_output_device_name = host.current_output_device_name();
             ui.main_menu_bar(|| {
@@ -239,7 +240,13 @@ pub fn main_loop(host: audio::Host, input: Receiver<DataChunk>, output: SyncSend
                         let end_pos = node_editor_state.input_pos(end).unwrap();
                         let end_pos = [end_pos[0] + win_pos[0], end_pos[1] + win_pos[1]];
                         draw_list
-                            .add_line(start_pos.clone(), end_pos.clone(), (0.5, 0.5, 0.5, 0.5))
+                            .add_bezier_curve(
+                                [start_pos[0], start_pos[1] + 5.0],
+                                [start_pos[0], (start_pos[1] + end_pos[1]) / 2.0],
+                                [end_pos[0], (start_pos[1] + end_pos[1]) / 2.0],
+                                end_pos.clone(),
+                                (0.5, 0.5, 0.5, 0.5),
+                            )
                             .thickness(2.0)
                             .build();
                     }
@@ -247,9 +254,14 @@ pub fn main_loop(host: audio::Host, input: Receiver<DataChunk>, output: SyncSend
                         let start_pos = node_editor_state.output_pos(&start).unwrap();
                         let start_pos = [start_pos[0] + win_pos[0], start_pos[1] + win_pos[1]];
                         let end_pos = ui.io().mouse_pos;
-                        // let end_pos = [end_pos[0] + win_pos[0], end_pos[1] + win_pos[1]];
                         draw_list
-                            .add_line(start_pos.clone(), end_pos.clone(), (0.5, 0.5, 0.5, 0.5))
+                            .add_bezier_curve(
+                                [start_pos[0], start_pos[1] + 5.0],
+                                [start_pos[0], (start_pos[1] + end_pos[1]) / 2.0],
+                                [end_pos[0], (start_pos[1] + end_pos[1]) / 2.0],
+                                end_pos.clone(),
+                                (0.5, 0.5, 0.5, 0.5),
+                            )
                             .thickness(2.0)
                             .build();
                     }
