@@ -103,7 +103,7 @@ impl PhaseVocoder {
                         let unscaled_index = (i as f32 / rate).ceil() as usize;
                         if unscaled_index < duration / 2 {
                             scaled[c].push(Complex32::from_polar(
-                                &samples[c][unscaled_index].norm(),
+                                &(samples[c][unscaled_index].norm() / rate),
                                 &(rate * unwrapped_phases[c][unscaled_index]),
                             ));
                         } else {
@@ -115,7 +115,7 @@ impl PhaseVocoder {
                             duration - ((duration - i - 1) as f32 / rate).ceil() as usize - 1;
                         if unscaled_index >= duration / 2 {
                             scaled[c].push(Complex32::from_polar(
-                                &samples[c][unscaled_index].norm(),
+                                &(samples[c][unscaled_index].norm() / rate),
                                 &(rate * unwrapped_phases[c][unscaled_index]),
                             ));
                         } else {
@@ -133,7 +133,7 @@ impl PhaseVocoder {
                         let rate = if rate.is_nan() { 1.0 } else { rate };
                         if unscaled_index < duration / 2 {
                             scaled[c].push(Complex32::from_polar(
-                                &samples[c][unscaled_index].norm(),
+                                &(samples[c][unscaled_index].norm() / rate),
                                 &(rate * unwrapped_phases[c][unscaled_index]),
                             ));
                         } else {
@@ -150,7 +150,7 @@ impl PhaseVocoder {
                         let rate = if rate.is_nan() { 1.0 } else { rate };
                         if unscaled_index >= duration / 2 {
                             scaled[c].push(Complex32::from_polar(
-                                &samples[c][unscaled_index].norm(),
+                                &(samples[c][unscaled_index].norm() / rate),
                                 &(rate * unwrapped_phases[c][unscaled_index]),
                             ));
                         } else {
